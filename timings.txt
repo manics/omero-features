@@ -1,0 +1,87 @@
+
+: example.big_create()
+
+
+: time example.big_write()
+CPU times: user 54.92 s, sys: 4.90 s, total: 59.83 s
+Wall time: 61.09 s
+
+
+: time x1=example.big_read1()
+CPU times: user 0.73 s, sys: 0.43 s, total: 1.15 s
+Wall time: 1.37 s
+
+: print x1.dtype
+[('type', 'S256'), ('id', '<i4'), ('c', '<i4'), ('z', '<i4'), ('t', '<i4'), ('_features', '<f8', (1000,))]
+
+: print x1.shape
+(6000,)
+
+
+: time x2=example.big_read2()
+CPU times: user 0.45 s, sys: 0.70 s, total: 1.15 s
+Wall time: 1.42 s
+
+: print x2.dtype
+[('type', 'S256'), ('id', '<i4'), ('c', '<i4'), ('z', '<i4'), ('t', '<i4'), ('_features', '<f8', (1000,))]
+
+: print x2.shape
+(30000,)
+
+
+$ purge
+
+$ time python -c 'import example; example.big_create()'
+real    0m1.300s
+user    0m0.151s
+sys     0m0.124s
+
+$ time python -c 'import example; example.big_write()'
+real    1m2.587s
+user    0m55.403s
+sys     0m4.295s
+
+$ ls -lh test.h5
+-rw-rw-rw-  1 simon  staff   1.8G  5 May 19:06 test.h5
+
+$ time python -c 'import example; x=example.big_read1(); print x.dtype; print x.shape'
+[('type', 'S256'), ('id', '<i4'), ('c', '<i4'), ('z', '<i4'), ('t', '<i4'), ('_features', '<f8', (1000,))]
+(6000,)
+real    0m1.332s
+user    0m0.790s
+sys     0m0.457s
+
+$ time python -c 'import example; x=example.big_read2(); print x.dtype; print x.shape'
+[('type', 'S256'), ('id', '<i4'), ('c', '<i4'), ('z', '<i4'), ('t', '<i4'), ('_features', '<f8', (1000,))]
+(30000,)
+real    0m1.333s
+user    0m0.537s
+sys     0m0.737s
+
+$ purge
+$ time python -c 'import example; example.big_read1()'
+real    0m9.293s
+user    0m1.214s
+sys     0m1.206s
+
+$ purge
+$ time python -c 'import example; example.big_read2()'
+real    0m9.966s
+user    0m0.944s
+sys     0m1.595s
+
+$ purge
+$ time python -c 'import example; example.big_create_indices()'
+real    0m12.274s
+user    0m2.990s
+sys     0m2.631s
+
+$ purge
+$ time python -c 'import example; example.big_read1()'
+s_push: parser stack overflow
+
+$ purge
+$ time python -c 'import example; example.big_read2()'
+real    0m8.801s
+user    0m1.483s
+sys     0m1.370s
