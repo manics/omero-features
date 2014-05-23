@@ -62,6 +62,40 @@ def query_by_map_ann(**kwargs):
     results = qs.findAllByQuery(q, params)
     return results
 
+def type_to_str(x):
+    t = type(x)
+    if t in [bool, float, int, long, str]:
+        return '%s:%s' % (t.__name__, x)
+    else:
+        raise Exception('Unsupported type: %s' % t)
+
+def type_from_str(s):
+    t, x = s.split(':', 1)
+    if t == 'bool':
+        if x == 'True':
+            return True
+        if x == 'False':
+            return False
+        raise Exception('Invalid bool: %s' % x)
+    if t == 'float':
+        return float(x)
+    if t == 'int':
+        return int(x)
+    if t == 'long':
+        return long(x)
+    if t == 'str':
+        return x
+    raise Exception('Unsupported type: %s' % s)
+
+def create_map_ann_multitype(**kwargs):
+    d = dict((k, type_to_str(v)) for k, v in kwargs.iteritems())
+    return create_map_ann(**d)
+
+def query_by_map_ann_multitype(**kwargs):
+    d = dict((k, type_to_str(v)) for k, v in kwargs.iteritems())
+    return query_by_map_ann(**d)
+
+
 # E.g.
 # z=query_by_map_ann(channel1=['0','5'],channel2='3')
 # set((y.getMapValue()['channel1'].val,y.getMapValue()['channel2'].val) for y in z)
