@@ -24,6 +24,10 @@ OMERO.features abstract API
 """
 
 class AbstractFeatureSetStorage(object):
+    """
+    A single feature set.
+    Each element is a fixed width array of doubles
+    """
 
     def store1(self, rowmeta, values):
         raise Exception('Not implemented')
@@ -33,6 +37,9 @@ class AbstractFeatureSetStorage(object):
 
 
 class AbstractFeatureStorage(object):
+    """
+    Multiple feature sets.
+    """
 
     def store1(self, rowmeta, fsmeta, values):
         raise Exception('Not implemented')
