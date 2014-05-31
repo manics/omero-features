@@ -23,6 +23,8 @@
 OMERO.features metadata storage
 
 At present only strings are supported for keys and values
+
+Todo: Namespace
 """
 
 import omero
@@ -55,8 +57,9 @@ def query_by_map_ann(**kwargs):
 
     # join fetch mapValue is only needed if we need to return the map, the
     # query should run without it
-    q = 'from MapAnnotation ann join fetch ann.mapValue map where %s' % (
-        ' and '.join(conditions))
+    q = 'from MapAnnotation ann join fetch ann.mapValue map'
+    if conditions:
+        q += ' where ' + ' and '.join(conditions)
 
     print q
     results = qs.findAllByQuery(q, params)
@@ -103,5 +106,5 @@ def query_by_map_ann_multitype(**kwargs):
 def print_key_values(map):
     print ' '.join(['%s=%s' % (k, unwrap(map[k])) for k in map])
 
-for b in a:
-    print_key_values(b)
+#for b in a:
+#    print_key_values(b)
