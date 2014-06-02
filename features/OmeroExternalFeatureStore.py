@@ -77,11 +77,11 @@ class FeatureFileStore(AbstractFeatureStorage):
             self.fss[fskey] = FeatureSetFileStore(fsmeta)
         return self.fss[fskey]
 
-    def store(self, rowmetas, fsmetas, values):
+    def store(self, fsmetas, rowmetas, values):
         for fsmeta in fsmetas:
             fs = self.get_feature_set(fsmeta)
             fs.store(rowmetas, values)
 
-    def fetch(self, rowquery, fsquery):
+    def fetch(self, fsquery, rowquery):
         fs = self.get_feature_set(fsquery)
         fs.fetch(rowquery)

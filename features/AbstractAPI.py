@@ -41,8 +41,8 @@ class AbstractFeatureStorage(object):
     Multiple feature sets.
     """
 
-    def store1(self, rowmeta, fsmeta, values):
+    def store1(self, fsmeta, rowmeta, values):
         raise Exception('Not implemented')
 
-    def fetch(self, rowmeta, fsmeta):
+    def fetch(self, fsmeta, rowmeta):
         raise Exception('Not implemented')
