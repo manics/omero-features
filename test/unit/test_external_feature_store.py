@@ -79,19 +79,17 @@ class TestFeatureFileStore(object):
     def setup_method(self, method):
         self.mox = mox.Mox()
         self.fsmeta = {'name': 'a', 'version': '1'}
+        self.rowmetas = [{'id': '1'}, {'id': '2'}]
+        self.valuess = [[1.0, 2.0], [-1.0, -2.0]]
 
     def teardown_method(self, method):
         self.mox.UnsetStubs()
 
-    class MockFeatureSetFileStore:
-        pass
-
-    #def create_feature_file_store(self):
-    #    return FeatureFileStore
-
     def test_get_feature_set(self, tmpdir):
         ma = self.mox.CreateMock(OmeroMetadata.MapAnnotations)
-        mockfs = self.MockFeatureSetFileStore()
+        mockfs = self.mox.CreateMock(
+            OmeroExternalFeatureStore.FeatureSetFileStore)
+
         self.mox.StubOutWithMock(OmeroMetadata, 'MapAnnotations')
         self.mox.StubOutWithMock(
             OmeroExternalFeatureStore, 'FeatureSetFileStore')
@@ -106,5 +104,44 @@ class TestFeatureFileStore(object):
         fs = ffs.get_feature_set(self.fsmeta)
         assert fs == mockfs
         assert ffs.fss == {(('name', 'a'), ('version', '1')): mockfs}
+
+        # Second call should not create a new FeatureSetFileStore
+        fs2 = ffs.get_feature_set(self.fsmeta)
+        assert fs2 == mockfs
+        assert ffs.fss == {(('name', 'a'), ('version', '1')): mockfs}
+
+        self.mox.VerifyAll()
+
+    def test_store(self, tmpdir):
+        ma = self.mox.CreateMock(OmeroMetadata.MapAnnotations)
+        mockfs = self.mox.CreateMock(
+            OmeroExternalFeatureStore.FeatureSetFileStore)
+        mockfs.store(self.rowmetas, self.valuess) #.AndReturn(None)
+
+        self.mox.ReplayAll()
+
+        ffs = OmeroExternalFeatureStore.FeatureFileStore(tmpdir, 'session')
+        self.mox.StubOutWithMock(ffs, 'get_feature_set')
+        ffs.get_feature_set(self.fsmeta).AndReturn(mockfs)
+
+        self.mox.ReplayAll()
+        ffs.store([self.fsmeta], self.rowmetas, self.valuess)
+
+        self.mox.VerifyAll()
+
+    def test_query(self, tmpdir):
+        ma = self.mox.CreateMock(OmeroMetadata.MapAnnotations)
+        mockfs = self.mox.CreateMock(
+            OmeroExternalFeatureStore.FeatureSetFileStore)
+        mockfs.fetch(self.rowmetas[0]) #.AndReturn(self.valuess)
+
+        self.mox.ReplayAll()
+
+        ffs = OmeroExternalFeatureStore.FeatureFileStore(tmpdir, 'session')
+        self.mox.StubOutWithMock(ffs, 'get_feature_set')
+        ffs.get_feature_set(self.fsmeta).AndReturn(mockfs)
+
+        self.mox.ReplayAll()
+        ffs.fetch(self.fsmeta, self.rowmetas[0])
 
         self.mox.VerifyAll()
