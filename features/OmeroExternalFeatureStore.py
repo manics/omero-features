@@ -28,10 +28,43 @@ import OmeroMetadata
 
 
 import itertools
+import numpy
+import os
 
 
 def prefix_fields(prefix, d):
     return dict((prefix + k, v) for k, v in d.iteritems())
+
+
+class FileStoreMapper(object):
+    """
+    Converts feature-set annotations into feature file-paths
+    """
+
+    def __init__(self, rootdir):
+        self.rootdir = rootdir
+        self.ext = '.npy'
+
+    def get(self, fsann, rowann):
+        fspath = os.path.join(self.rootdir, '%08d' % fsann.id)
+        fname = '%08d%s' % (rowann.id, self.ext)
+        p = os.path.join(fspath, fname)
+        if not os.path.isdir(fspath):
+            os.mkdir(fspath)
+        return p
+
+    def delete(self, fsann, rowann):
+        p = self.get(fsann, rowann)
+        os.unlink(p)
+
+    def load(self, fsann, rowann):
+        p = self.get(fsann, rowann)
+        return numpy.load(p)
+
+    def save(self, fsann, rowann, values):
+        # TODO: Check format/shape of values
+        p = self.get(fsann, rowann)
+        numpy.save(values)
 
 
 class FeatureSetFileStore(AbstractFeatureSetStorage):

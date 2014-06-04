@@ -22,10 +22,63 @@
 import pytest
 import mox
 
+import numpy
 import os
 
 from features import OmeroExternalFeatureStore
 from features import OmeroMetadata
+
+
+
+class TestFileStoreMapper(object):
+
+    def setup_method(self, method):
+        self.mox = mox.Mox()
+
+        class MockFsAnn:
+            id = 1
+
+        class MockRowAnn:
+            id = 12
+
+        self.fsann = MockFsAnn()
+        self.rowann = MockRowAnn()
+
+    def teardown_method(self, method):
+        self.mox.UnsetStubs()
+
+    def test_get(self, tmpdir):
+        fsm = OmeroExternalFeatureStore.FileStoreMapper(str(tmpdir))
+        p = fsm.get(self.fsann, self.rowann)
+        tmpdir.ensure_dir('00000001')
+        assert p == str(tmpdir.join('00000001', '00000012.npy'))
+
+    def test_delete(self, tmpdir):
+        f = tmpdir.join('00000001', '00000012.npy')
+        f.ensure()
+        f.write('test')
+
+        fsm = OmeroExternalFeatureStore.FileStoreMapper(str(tmpdir))
+        fsm.delete(self.fsann, self.rowann)
+        assert not os.path.exists(str(f))
+
+    def test_load(self, tmpdir):
+        tmpdir.ensure_dir('00000001')
+        f = tmpdir.join('00000001', '00000012.npy')
+        numpy.save(str(f), [1, 2, 3])
+
+        fsm = OmeroExternalFeatureStore.FileStoreMapper(str(tmpdir))
+        a = fsm.load(self.fsann, self.rowann)
+        assert all(a == numpy.array([1, 2, 3]))
+
+    def save(self, tmpdir):
+        f = tmpdir.join('00000001', '00000012.npy')
+
+        values = numpy.array([1, 2, 3])
+        fsm = OmeroExternalFeatureStore.FileStoreMapper(str(tmpdir))
+        fsm.save(self.fsann, self.rowann, values)
+        f.ensure()
+        assert all(numpy.load(f) == values)
 
 
 class TestFeatureSetFileStore(object):
