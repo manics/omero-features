@@ -272,14 +272,18 @@ class TestFeatureTableStore(object):
         fskey = (('fsname', 'a'), ('version', '1.2.3'))
         fts = OmeroTablesFeatureStore.FeatureTableStore(None)
 
+        self.mox.StubOutWithMock(fts.fss, 'get')
+        self.mox.StubOutWithMock(fts.fss, 'insert')
+
         if opened:
-            fts.fss[fskey] = fs
+            fts.fss.get(fskey).AndReturn(fs)
         else:
+            fts.fss.get(fskey).AndReturn(None)
             OmeroTablesFeatureStore.FeatureSetTableStore(fsmeta).AndReturn(fs)
+            fts.fss.insert(fskey, fs)
         self.mox.ReplayAll()
 
         assert fts.get_feature_set(fsmeta) == fs
-        assert fts.fss.keys() == [fskey]
         self.mox.VerifyAll()
 
     def test_store(self):

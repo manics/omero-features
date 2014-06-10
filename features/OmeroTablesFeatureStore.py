@@ -150,6 +150,10 @@ class LRUTableCache(LRUCache):
         self.cache[key].close()
         del self.cache[key]
 
+    def close(self):
+        while self.cache:
+            self.remove_oldest()
+
 
 class FeatureTableStore(AbstractFeatureStorage):
     """
@@ -161,13 +165,15 @@ class FeatureTableStore(AbstractFeatureStorage):
         self.namespace = kwargs.get('namespace', 'omero.features')
         self.cachesize = kwargs.get('cachesize', 10)
         self.ma = OmeroMetadata.MapAnnotations(session, self.namespace)
-        self.fss = {}
+        self.fss = LRUTableCache(kwargs.get('cachesize', 10))
 
     def get_feature_set(self, fsmeta):
         fskey = tuple(sorted(fsmeta.iteritems()))
-        if fskey not in self.fss:
-            self.fss[fskey] = FeatureSetTableStore(fsmeta)
-        return self.fss[fskey]
+        r = self.fss.get(fskey)
+        if not r:
+            r = FeatureSetTableStore(fsmeta)
+            self.fss.insert(fskey, r)
+        return r
 
     def store(self, fsmetas, rowmetas, values):
         for fsmeta, values in itertools.izip(fsmetas, values):
@@ -177,3 +183,6 @@ class FeatureTableStore(AbstractFeatureStorage):
     def fetch(self, fsquery, rowquery):
         fs = self.get_feature_set(fsquery)
         return fs.fetch(rowquery)
+
+    def close(self):
+        self.fss.close()
