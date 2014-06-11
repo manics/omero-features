@@ -37,21 +37,22 @@ class MapAnnotationWrapper(AnnotationWrapper):
 
     def _getQueryString(self):
         """
-        Used for building queries in generic methods such as getObjects("MapAnnotation")
+        Used for building queries in generic methods such as
+        getObjects("MapAnnotation")
         """
         return ("select obj from MapAnnotation obj "
-                 "join fetch obj.details.owner as owner "
-                 "join fetch obj.details.group "
-                 "join fetch obj.details.creationEvent "
-                 "join fetch obj.mapValue")
+                "join fetch obj.details.owner as owner "
+                "join fetch obj.details.group "
+                "join fetch obj.details.creationEvent "
+                "join fetch obj.mapValue")
 
-    def getValue (self):
+    def getValue(self):
         """
         Gets map value
         """
         return unwrap(self._obj.mapValue)
 
-    def setValue (self, val):
+    def setValue(self, val):
         """
         Sets map value
         """

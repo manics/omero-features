@@ -23,6 +23,7 @@
 OMERO.features abstract API
 """
 
+
 class AbstractFeatureSetStorage(object):
     """
     A single feature set.
