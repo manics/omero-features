@@ -29,8 +29,6 @@ import omero
 from omero.rtypes import unwrap
 
 import itertools
-#import numpy
-#import os
 
 
 class FeatureSetTableStore(AbstractFeatureSetStorage):

@@ -21,15 +21,10 @@
 
 import pytest
 import mox
-from copy import deepcopy
-
-import numpy
-import os
 
 import omero
 from omero.rtypes import unwrap, wrap
 
-from features import OmeroExternalFeatureStore
 from features import OmeroMetadata
 from features import OmeroTablesFeatureStore
 
@@ -40,7 +35,7 @@ class TestLRUCache(object):
         c = OmeroTablesFeatureStore.LRUCache(2)
         assert len(c) == 0
 
-        assert c.get('key1') == None
+        assert c.get('key1') is None
         assert c.get('key1', -1) == -1
 
         c.insert('key1', 1)
@@ -57,7 +52,7 @@ class TestLRUCache(object):
         assert len(c) == 2
 
         c.insert('key3', 3)
-        assert c.get('key1') == None
+        assert c.get('key1') is None
         assert c.get('key2') == 2
         assert c.get('key3') == 3
         assert len(c) == 2
@@ -70,6 +65,7 @@ class MockMapAnnotation:
     def getMapValue(self):
         return self.map
 
+
 class MockSharedResources:
     def __init__(self, tid, table):
         self.tid = tid
@@ -80,12 +76,14 @@ class MockSharedResources:
         assert unwrap(o.id) == self.tid
         return self.table
 
+
 class MockSession:
     def __init__(self, tid, table):
         self.msr = MockSharedResources(tid, table)
 
     def sharedResources(self):
         return self.msr
+
 
 class MockOriginalFile:
     def __init__(self, id):
@@ -94,14 +92,17 @@ class MockOriginalFile:
     def getId(self):
         return self.id
 
+
 class MockColumn:
     values = None
 
     def __eq__(self, o):
         return self.values == o.values
 
+
 class MockTableData:
     columns = None
+
 
 class MockTable:
     def __init__(self):
@@ -125,6 +126,7 @@ class MockTable:
     def getHeaders(self):
         pass
 
+
 class MockFeatureSetTableStore(OmeroTablesFeatureStore.FeatureSetTableStore):
     def __init__(self, session, namespace, fsmeta):
         self.session = session
@@ -133,6 +135,7 @@ class MockFeatureSetTableStore(OmeroTablesFeatureStore.FeatureSetTableStore):
         self.cols = None
         self.table = None
         self.header = None
+
 
 class TestFeatureSetFileStore(object):
 
