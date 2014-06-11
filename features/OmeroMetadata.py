@@ -79,7 +79,7 @@ class MapAnnotations(object):
         results = qs.findAllByQuery(q, params)
         return results
 
-    @classmethod
+    @staticmethod
     def type_to_str(x):
         t = type(x)
         if t in [bool, float, int, long, str]:
@@ -87,7 +87,7 @@ class MapAnnotations(object):
         else:
             raise Exception('Unsupported type: %s' % t)
 
-    @classmethod
+    @staticmethod
     def type_from_str(s):
         t, x = s.split(':', 1)
         if t == 'bool':
@@ -107,11 +107,13 @@ class MapAnnotations(object):
         raise Exception('Unsupported type: %s' % s)
 
     def create_map_ann_multitype(self, **kwargs):
-        d = dict((k, type_to_str(v)) for k, v in kwargs.iteritems())
+        d = dict((k, self.type_to_str(v))
+                 for k, v in kwargs.iteritems())
         return self.create_map_ann(**d)
 
     def query_by_map_ann_multitype(self, **kwargs):
-        d = dict((k, type_to_str(v)) for k, v in kwargs.iteritems())
+        d = dict((k, self.type_to_str(v))
+                 for k, v in kwargs.iteritems())
         return self.query_by_map_ann(**d)
 
 
