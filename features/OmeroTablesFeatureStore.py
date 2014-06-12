@@ -54,7 +54,7 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
         if self.table:
             assert self.cols
             return self.table
-        a = self.ma.query_by_map_ann(**dict(self.fsmeta.items()))
+        a = self.ma.query_by_map_ann(dict(self.fsmeta.items()))
         if len(a) < 1:
             raise Exception(
                 'No annotations found for: %s' % str(self.fsmeta))
@@ -80,7 +80,7 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
             self.cols[n].values = values[n]
         self.table.addData(self.cols)
         tid = unwrap(self.get_table().getOriginalFile().getId())
-        self.ma.create_map_ann(**dict(
+        self.ma.create_map_ann(dict(
             [('_tableid', tid), ('_offset', off)] + rowmeta.items()))
 
     def store(self, rowmetas, values):
@@ -89,7 +89,7 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
 
     def fetch(self, rowquery):
         tid = unwrap(self.get_table().getOriginalFile().getId())
-        anns = self.ma.query_by_map_ann(**dict(
+        anns = self.ma.query_by_map_ann(dict(
             rowquery.items() + [('_tableid', tid)]))
         offs = [unwrap(a.getMapValue()['_offset']) for a in anns]
         data = self.table.readCoordinates(offs)

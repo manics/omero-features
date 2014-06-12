@@ -78,7 +78,7 @@ class FeatureSetFileStore(AbstractFeatureSetStorage):
         self.fsmeta = prefix_fields('f:', fsmeta)
 
     def store1(self, rowmeta, values):
-        self.ma.create_map_ann(**dict(
+        self.ma.create_map_ann(dict(
             self.fsmeta.items() + [
                 ('r:' + k, v) for k, v in rowmeta.iteritems()]))
 
@@ -87,7 +87,7 @@ class FeatureSetFileStore(AbstractFeatureSetStorage):
             self.store1(rowmeta, value)
 
     def fetch(self, rowquery):
-        self.ma.query_by_map_ann(**dict(
+        self.ma.query_by_map_ann(dict(
             self.fsmeta.items() + [
                 ('r:' + k, v) for k, v in rowquery.iteritems()]))
 

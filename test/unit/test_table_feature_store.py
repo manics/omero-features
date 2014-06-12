@@ -168,7 +168,7 @@ class TestFeatureSetFileStore(object):
             store.table = table
             store.cols = object()
         else:
-            store.ma.query_by_map_ann(fsname='a').AndReturn([ann])
+            store.ma.query_by_map_ann({'fsname': 'a'}).AndReturn([ann])
             store.open_table(1).AndReturn(table)
 
         self.mox.ReplayAll()
@@ -205,7 +205,7 @@ class TestFeatureSetFileStore(object):
         table.getOriginalFile().AndReturn(MockOriginalFile(3))
 
         d = {'_tableid': 3, '_offset': 1, 'objectid': 4}
-        store.ma.create_map_ann(**d)
+        store.ma.create_map_ann(d)
         rowmeta = {'objectid': 4}
         self.mox.ReplayAll()
 
@@ -239,7 +239,7 @@ class TestFeatureSetFileStore(object):
 
         rowquery = {'name': 'a'}
         d = dict(rowquery.items() + [('_tableid', 1)])
-        store.ma.query_by_map_ann(**d).AndReturn([ann1, ann2])
+        store.ma.query_by_map_ann(d).AndReturn([ann1, ann2])
 
         self.mox.StubOutWithMock(table, 'readCoordinates')
         values = [10, 20]

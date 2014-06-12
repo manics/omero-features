@@ -94,7 +94,7 @@ class TestFeatureSetFileStore(object):
         rowmeta = {'id': '1'}
         values = [1.0, -2.0]
         ma = self.mox.CreateMock(OmeroMetadata.MapAnnotations)
-        ma.create_map_ann(**{'f:name': 'a', 'r:id': '1'})#.AndReturn()
+        ma.create_map_ann({'f:name': 'a', 'r:id': '1'})#.AndReturn()
         self.mox.ReplayAll()
 
         fs = OmeroExternalFeatureStore.FeatureSetFileStore(ma, self.fsmeta)
@@ -106,8 +106,8 @@ class TestFeatureSetFileStore(object):
         rowmetas = [{'id': '1'}, {'id': '2'}]
         valuess = [[1.0, 2.0], [-1.0, -2.0]]
         ma = self.mox.CreateMock(OmeroMetadata.MapAnnotations)
-        ma.create_map_ann(**{'f:name': 'a', 'r:id': '1'})#.AndReturn()
-        ma.create_map_ann(**{'f:name': 'a', 'r:id': '2'})#.AndReturn()
+        ma.create_map_ann({'f:name': 'a', 'r:id': '1'})#.AndReturn()
+        ma.create_map_ann({'f:name': 'a', 'r:id': '2'})#.AndReturn()
         self.mox.ReplayAll()
 
         fs = OmeroExternalFeatureStore.FeatureSetFileStore(ma, self.fsmeta)
@@ -118,7 +118,7 @@ class TestFeatureSetFileStore(object):
     def test_query(self):
         rowquery = {'id': '1'}
         ma = self.mox.CreateMock(OmeroMetadata.MapAnnotations)
-        ma.query_by_map_ann(**{'f:name': 'a', 'r:id': '1'})#.AndReturn()
+        ma.query_by_map_ann({'f:name': 'a', 'r:id': '1'})#.AndReturn()
         self.mox.ReplayAll()
 
         fs = OmeroExternalFeatureStore.FeatureSetFileStore(ma, self.fsmeta)
