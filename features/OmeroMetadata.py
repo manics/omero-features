@@ -110,6 +110,9 @@ class MapAnnotations(object):
              'join ann.mapValue map')
         if conditions:
             q += ' where ' + ' and '.join(conditions)
+        # Each [id, key, value] is returned separately, use order by to ensure
+        # all keys/values for an annotation are consecutive
+        q += ' order by ann.id'
 
         print q
         anns = qs.projection(q, params)
