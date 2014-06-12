@@ -202,6 +202,7 @@ class TestFeatureSetFileStore(object):
         table = self.mox.CreateMock(MockTable)
         session = MockSession(1, table, 'table-name')
         store = MockFeatureSetTableStore(session, None, None)
+        self.mox.StubOutWithMock(store.ma, 'create_map_ann')
 
         tcols = [
             omero.grid.LongArrayColumn('Integers', '', 1),
@@ -211,6 +212,9 @@ class TestFeatureSetFileStore(object):
         ]
         table.initialize(mox.Func(lambda xs: comparecols(xs, tcols)))
         table.getHeaders().AndReturn(tcols)
+
+        table.getOriginalFile().AndReturn(MockOriginalFile(1))
+        store.ma.create_map_ann({'fsname': 'a', '_tableid': '1'})
 
         desc = [
             (int, 'Integers', 1),

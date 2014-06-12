@@ -64,6 +64,11 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
         return self.open_table(unwrap(a[0].getMapValue()['_tableid']))
 
     def new_table(self, column_desc):
+        meta = dict(self.fsmeta.items())
+        if '_tableid' in meta:
+            raise Exception(
+                'Reserved key already present in fsmeta: %s', '_tableid')
+
         name = self.desc_to_str(self.fsmeta)
         self.table = self.session.sharedResources().newTable(0, name)
         if not self.table:
@@ -85,6 +90,9 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
         self.cols = self.table.getHeaders()
         if not self.cols:
             raise Exception('Failed to get columns for table ID:%d' % tid)
+
+        meta['_tableid'] = str(unwrap(self.table.getOriginalFile().getId()))
+        self.ma.create_map_ann(meta)
 
     def open_table(self, tid):
         self.table = self.session.sharedResources().openTable(
