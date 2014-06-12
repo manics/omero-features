@@ -172,7 +172,7 @@ class TestMapAnnotations(object):
             assert ma.query_by_map_ann(
                 {'a': '1', 'bb': ['cc', 'dd']}, True) == {
                     10: {'a': '1', 'bb': 'cc'},
-                    20: {'a':'1', 'bb': 'dd'}
+                    20: {'a': '1', 'bb': 'dd'}
                 }
         self.mox.VerifyAll()
 

@@ -147,14 +147,3 @@ class MapAnnotations(object):
 
     def query_by_map_annkw_multitype(self, **kwargs):
         return self.query_by_map_ann_multitype(kwargs)
-
-
-# E.g.
-# z=query_by_map_ann(channel1=['0','5'],channel2='3')
-# set((y.getMapValue()['channel1'].val,y.getMapValue()['channel2'].val) for y in z)
-
-def print_key_values(map):
-    print ' '.join(['%s=%s' % (k, unwrap(map[k])) for k in map])
-
-#for b in a:
-#    print_key_values(b)
