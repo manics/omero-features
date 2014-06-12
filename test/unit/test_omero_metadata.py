@@ -59,7 +59,8 @@ class TestMapAnnotations(object):
         self.mox.UnsetStubs()
 
     @pytest.mark.parametrize('ns', [None, 'namespace'])
-    def test_create_map_ann(self, ns):
+    @pytest.mark.parametrize('kw', [True, False])
+    def test_create_map_ann(self, ns, kw):
         sess = MockSession()
         self.mox.StubOutWithMock(sess.us, 'saveAndReturnObject')
 
@@ -79,11 +80,15 @@ class TestMapAnnotations(object):
         self.mox.ReplayAll()
 
         ma = OmeroMetadata.MapAnnotations(sess, namespace=ns)
-        assert ma.create_map_ann(a='1', bb='cc') == rid
+        if kw:
+            assert ma.create_map_annkw(a='1', bb='cc') == rid
+        else:
+            assert ma.create_map_ann({'a': '1', 'bb': 'cc'}) == rid
         self.mox.VerifyAll()
 
     @pytest.mark.parametrize('ns', [None, 'namespace'])
-    def test_query_by_map_ann(self, ns):
+    @pytest.mark.parametrize('kw', [True, False])
+    def test_query_by_map_ann(self, ns, kw):
         sess = MockSession()
         self.mox.StubOutWithMock(sess.qs, 'findAllByQuery')
 
@@ -115,7 +120,11 @@ class TestMapAnnotations(object):
         self.mox.ReplayAll()
 
         ma = OmeroMetadata.MapAnnotations(sess, namespace=ns)
-        assert ma.query_by_map_ann(a='1', bb=['cc', 'dd']) == [r1, r2]
+        if kw:
+            assert ma.query_by_map_annkw(a='1', bb=['cc', 'dd']) == [r1, r2]
+        else:
+            assert ma.query_by_map_ann(
+                {'a': '1', 'bb': ['cc', 'dd']}) == [r1, r2]
         self.mox.VerifyAll()
 
     def test_type_to_str(self):
@@ -142,26 +151,34 @@ class TestMapAnnotations(object):
         with pytest.raises(Exception):
             ma.type_from_str('xxx')
 
-    def test_create_map_ann_multitype(self):
+    @pytest.mark.parametrize('kw', [True, False])
+    def test_create_map_ann_multitype(self, kw):
         ma = OmeroMetadata.MapAnnotations(None)
         self.mox.StubOutWithMock(ma, 'create_map_ann')
 
         r = 3
-        ma.create_map_ann(a='int:1', bb='str:cc').AndReturn(r)
+        ma.create_map_ann({'a': 'int:1', 'bb': 'str:cc'}).AndReturn(r)
 
         self.mox.ReplayAll()
 
-        assert ma.create_map_ann_multitype(a=1, bb='cc') == r
+        if kw:
+            assert ma.create_map_annkw_multitype(a=1, bb='cc') == r
+        else:
+            assert ma.create_map_ann_multitype({'a': 1, 'bb': 'cc'}) == r
         self.mox.VerifyAll()
 
-    def test_query_by_map_ann_multitype(self):
+    @pytest.mark.parametrize('kw', [True, False])
+    def test_query_by_map_ann_multitype(self, kw):
         ma = OmeroMetadata.MapAnnotations(None)
         self.mox.StubOutWithMock(ma, 'query_by_map_ann')
 
         r = [omero.model.MapAnnotationI()]
-        ma.query_by_map_ann(a='int:1', bb='str:cc').AndReturn(r)
+        ma.query_by_map_ann({'a': 'int:1', 'bb': 'str:cc'}).AndReturn(r)
 
         self.mox.ReplayAll()
 
-        assert ma.query_by_map_ann_multitype(a=1, bb='cc') == r
+        if kw:
+            assert ma.query_by_map_annkw_multitype(a=1, bb='cc') == r
+        else:
+            assert ma.query_by_map_ann_multitype({'a': 1, 'bb': 'cc'}) == r
         self.mox.VerifyAll()

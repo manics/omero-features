@@ -40,15 +40,15 @@ class MapAnnotations(object):
         if namespace is not None and not isinstance(namespace, str):
             raise Exception('namespace must be a string')
 
-    def create_map_ann(self, **kwargs):
-        d = dict((k, wrap(str(v))) for k, v in kwargs.iteritems())
+    def create_map_ann(self, kvs):
+        d = dict((k, wrap(str(v))) for k, v in kvs.iteritems())
         m = omero.model.MapAnnotationI()
         m.setNs(wrap(self.namespace))
         m.setMapValue(d)
         m = self.session.getUpdateService().saveAndReturnObject(m)
         return unwrap(m.id)
 
-    def query_by_map_ann(self, **kwargs):
+    def query_by_map_ann(self, kvs):
         params = omero.sys.ParametersI()
 
         qs = self.session.getQueryService()
@@ -58,7 +58,7 @@ class MapAnnotations(object):
             conditions.append('ann.ns = :ns')
             params.addString('ns', self.namespace)
 
-        for k, v in kwargs.iteritems():
+        for k, v in kvs.iteritems():
             paramk = 'k%d' % len(conditions)
             paramv = 'v%d' % len(conditions)
             params.addString(paramk, k)
@@ -81,7 +81,7 @@ class MapAnnotations(object):
         results = qs.findAllByQuery(q, params)
         return results
 
-    def project_by_map_ann(self, **kwargs):
+    def project_by_map_ann(self, kvs):
         params = omero.sys.ParametersI()
 
         qs = self.session.getQueryService()
@@ -91,7 +91,7 @@ class MapAnnotations(object):
             conditions.append('ann.ns = :ns')
             params.addString('ns', self.namespace)
 
-        for k, v in kwargs.iteritems():
+        for k, v in kvs.iteritems():
             paramk = 'k%d' % len(conditions)
             paramv = 'v%d' % len(conditions)
             params.addString(paramk, k)
@@ -150,15 +150,27 @@ class MapAnnotations(object):
             return x
         raise Exception('Unsupported type: %s' % s)
 
-    def create_map_ann_multitype(self, **kwargs):
+    def create_map_ann_multitype(self, kvs):
         d = dict((k, self.type_to_str(v))
-                 for k, v in kwargs.iteritems())
-        return self.create_map_ann(**d)
+                 for k, v in kvs.iteritems())
+        return self.create_map_ann(d)
 
-    def query_by_map_ann_multitype(self, **kwargs):
+    def query_by_map_ann_multitype(self, kvs):
         d = dict((k, self.type_to_str(v))
-                 for k, v in kwargs.iteritems())
-        return self.query_by_map_ann(**d)
+                 for k, v in kvs.iteritems())
+        return self.query_by_map_ann(d)
+
+    def create_map_annkw(self, **kwargs):
+        return self.create_map_ann(kwargs)
+
+    def query_by_map_annkw(self, **kwargs):
+        return self.query_by_map_ann(kwargs)
+
+    def create_map_annkw_multitype(self, **kwargs):
+        return self.create_map_ann_multitype(kwargs)
+
+    def query_by_map_annkw_multitype(self, **kwargs):
+        return self.query_by_map_ann_multitype(kwargs)
 
 
 # E.g.
