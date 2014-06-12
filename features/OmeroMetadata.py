@@ -48,7 +48,7 @@ class MapAnnotations(object):
         m = self.session.getUpdateService().saveAndReturnObject(m)
         return unwrap(m.id)
 
-    def query_by_map_ann(self, kvs):
+    def query_by_map_ann(self, kvs, projection=False):
         params = omero.sys.ParametersI()
 
         qs = self.session.getQueryService()
@@ -73,54 +73,30 @@ class MapAnnotations(object):
 
         # join fetch mapValue is only needed if we need to return the map, the
         # query should run without it
-        q = 'from MapAnnotation ann join fetch ann.mapValue map'
+        if projection:
+            q = ('select ann.id, index(map), map from MapAnnotation ann '
+                 'join ann.mapValue map')
+        else:
+            q = 'from MapAnnotation ann join fetch ann.mapValue map'
+
         if conditions:
             q += ' where ' + ' and '.join(conditions)
 
-        print q
-        results = qs.findAllByQuery(q, params)
-        return results
+        if projection:
+            # Each [id, key, value] is returned separately, use order by to
+            # ensure all keys/values for an annotation are consecutive
+            q += ' order by ann.id'
+            anns = qs.projection(q, params)
 
-    def project_by_map_ann(self, kvs):
-        params = omero.sys.ParametersI()
+            # iikvs: A map of ids:((id, key, value), ...)
+            results = dict(
+                (unwrap(iikvs[0]), dict((unwrap(ikv[1]), unwrap(ikv[2]))
+                                        for ikv in iikvs[1]))
+                for iikvs in itertools.groupby(anns, lambda x: x[0]))
+        else:
+            print q
+            results = qs.findAllByQuery(q, params)
 
-        qs = self.session.getQueryService()
-        conditions = []
-
-        if self.namespace is not None:
-            conditions.append('ann.ns = :ns')
-            params.addString('ns', self.namespace)
-
-        for k, v in kvs.iteritems():
-            paramk = 'k%d' % len(conditions)
-            paramv = 'v%d' % len(conditions)
-            params.addString(paramk, k)
-
-            if isinstance(v, list):
-                conditions.append(
-                    'ann.mapValue[:%s] in (:%s)' % (paramk, paramv))
-            else:
-                conditions.append(
-                    'ann.mapValue[:%s] = :%s' % (paramk, paramv))
-            params.add(paramv, wrap(v))
-
-        # join fetch mapValue is only needed if we need to return the map, the
-        # query should run without it
-        q = ('select ann.id, index(map), map from MapAnnotation ann '
-             'join ann.mapValue map')
-        if conditions:
-            q += ' where ' + ' and '.join(conditions)
-        # Each [id, key, value] is returned separately, use order by to ensure
-        # all keys/values for an annotation are consecutive
-        q += ' order by ann.id'
-
-        print q
-        anns = qs.projection(q, params)
-
-        # iikvs: A map of ids:((id, key, value), ...)
-        results = dict((unwrap(iikvs[0]), dict((unwrap(ikv[1]), unwrap(ikv[2]))
-                        for ikv in iikvs[1]))
-                       for iikvs in itertools.groupby(anns, lambda x: x[0]))
         return results
 
     @staticmethod

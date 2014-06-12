@@ -37,6 +37,9 @@ class MockQueryService:
     def findAllByQuery(self, q, p):
         pass
 
+    def projection(self, q, p):
+        pass
+
 
 class MockSession:
     def __init__(self):
@@ -87,23 +90,52 @@ class TestMapAnnotations(object):
         self.mox.VerifyAll()
 
     @pytest.mark.parametrize('ns', [None, 'namespace'])
-    @pytest.mark.parametrize('kw', [True, False])
-    def test_query_by_map_ann(self, ns, kw):
+    @pytest.mark.parametrize('kwp', ['default', 'kw', 'project'])
+    def test_query_by_map_ann(self, ns, kwp):
         sess = MockSession()
         self.mox.StubOutWithMock(sess.qs, 'findAllByQuery')
+        self.mox.StubOutWithMock(sess.qs, 'projection')
 
-        if ns is not None:
-            query = (
-                'from MapAnnotation ann join fetch ann.mapValue map where '
-                'ann.ns = :ns '
-                'and ann.mapValue[:k1] = :v1 and ann.mapValue[:k2] in (:v2)')
-            params = {'ns': ns,
-                      'k1': 'a', 'v1': '1', 'k2': 'bb', 'v2': ['cc', 'dd']}
+        query = 'from MapAnnotation ann join fetch ann.mapValue map where '
+
+        if kwp != 'project':
+            if ns is not None:
+                query = (
+                    'from MapAnnotation ann join fetch ann.mapValue map where '
+                    'ann.ns = :ns '
+                    'and ann.mapValue[:k1] = :v1 '
+                    'and ann.mapValue[:k2] in (:v2)')
+                params = {
+                    'ns': ns,
+                    'k1': 'a', 'v1': '1', 'k2': 'bb', 'v2': ['cc', 'dd']}
+            else:
+                query = (
+                    'from MapAnnotation ann join fetch ann.mapValue map where '
+                    'ann.mapValue[:k0] = :v0 and ann.mapValue[:k1] in (:v1)')
+                params = {
+                    'k0': 'a', 'v0': '1', 'k1': 'bb', 'v1': ['cc', 'dd']}
         else:
-            query = (
-                'from MapAnnotation ann join fetch ann.mapValue map where '
-                'ann.mapValue[:k0] = :v0 and ann.mapValue[:k1] in (:v1)')
-            params = {'k0': 'a', 'v0': '1', 'k1': 'bb', 'v1': ['cc', 'dd']}
+            if ns is not None:
+                query = (
+                    'select ann.id, index(map), map from MapAnnotation ann '
+                    'join ann.mapValue map where '
+                    'ann.ns = :ns '
+                    'and ann.mapValue[:k1] = :v1 '
+                    'and ann.mapValue[:k2] in (:v2) '
+                    'order by ann.id')
+                params = {
+                    'ns': ns,
+                    'k1': 'a', 'v1': '1', 'k2': 'bb', 'v2': ['cc', 'dd']}
+            else:
+                query = (
+                    'select ann.id, index(map), map from MapAnnotation ann '
+                    'join ann.mapValue map where '
+                    'ann.mapValue[:k0] = :v0 '
+                    'and ann.mapValue[:k1] in (:v1) '
+                    'order by ann.id')
+                params = {
+                    'k0': 'a', 'v0': '1', 'k1': 'bb', 'v1': ['cc', 'dd']}
+
         params = omero.sys.ParametersI(wrap(params).val)
 
         r1 = omero.model.MapAnnotationI()
@@ -114,17 +146,34 @@ class TestMapAnnotations(object):
         r1.setMapValue({'a': rstring('1'), 'bb': rstring('cc')})
         r2.setMapValue({'a': rstring('1'), 'bb': rstring('dd')})
 
-        sess.qs.findAllByQuery(query, mox.Func(
-            lambda o: params.map == o.map)).AndReturn([r1, r2])
+        ps = [
+            [rlong(10), rstring('a'), rstring('1')],
+            [rlong(10), rstring('bb'), rstring('cc')],
+            [rlong(20), rstring('a'), rstring('1')],
+            [rlong(20), rstring('bb'), rstring('dd')],
+            ]
+
+        if kwp != 'project':
+            sess.qs.findAllByQuery(query, mox.Func(
+                lambda o: params.map == o.map)).AndReturn([r1, r2])
+        else:
+            sess.qs.projection(query, mox.Func(
+                lambda o: params.map == o.map)).AndReturn(ps)
 
         self.mox.ReplayAll()
 
         ma = OmeroMetadata.MapAnnotations(sess, namespace=ns)
-        if kw:
+        if kwp == 'kw':
             assert ma.query_by_map_annkw(a='1', bb=['cc', 'dd']) == [r1, r2]
-        else:
+        elif kwp == 'default':
             assert ma.query_by_map_ann(
                 {'a': '1', 'bb': ['cc', 'dd']}) == [r1, r2]
+        else:
+            assert ma.query_by_map_ann(
+                {'a': '1', 'bb': ['cc', 'dd']}, True) == {
+                    10: {'a': '1', 'bb': 'cc'},
+                    20: {'a':'1', 'bb': 'dd'}
+                }
         self.mox.VerifyAll()
 
     def test_type_to_str(self):
