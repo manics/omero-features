@@ -25,6 +25,8 @@ OMERO.features metadata storage
 At present only strings are supported for keys and values
 """
 
+import itertools
+
 import omero
 import omero.gateway
 from omero.rtypes import wrap, unwrap
@@ -77,6 +79,45 @@ class MapAnnotations(object):
 
         print q
         results = qs.findAllByQuery(q, params)
+        return results
+
+    def project_by_map_ann(self, **kwargs):
+        params = omero.sys.ParametersI()
+
+        qs = self.session.getQueryService()
+        conditions = []
+
+        if self.namespace is not None:
+            conditions.append('ann.ns = :ns')
+            params.addString('ns', self.namespace)
+
+        for k, v in kwargs.iteritems():
+            paramk = 'k%d' % len(conditions)
+            paramv = 'v%d' % len(conditions)
+            params.addString(paramk, k)
+
+            if isinstance(v, list):
+                conditions.append(
+                    'ann.mapValue[:%s] in (:%s)' % (paramk, paramv))
+            else:
+                conditions.append(
+                    'ann.mapValue[:%s] = :%s' % (paramk, paramv))
+            params.add(paramv, wrap(v))
+
+        # join fetch mapValue is only needed if we need to return the map, the
+        # query should run without it
+        q = ('select ann.id, index(map), map from MapAnnotation ann '
+             'join ann.mapValue map')
+        if conditions:
+            q += ' where ' + ' and '.join(conditions)
+
+        print q
+        anns = qs.projection(q, params)
+
+        # iikvs: A map of ids:((id, key, value), ...)
+        results = dict((unwrap(iikvs[0]), dict((unwrap(ikv[1]), unwrap(ikv[2]))
+                        for ikv in iikvs[1]))
+                       for iikvs in itertools.groupby(anns, lambda x: x[0]))
         return results
 
     @staticmethod
