@@ -63,6 +63,29 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
                 'Multiple annotations found for: %s' % str(self.fsmeta))
         return self.open_table(unwrap(a[0].getMapValue()['_tableid']))
 
+    def new_table(self, column_desc):
+        name = self.desc_to_str(self.fsmeta)
+        self.table = self.session.sharedResources().newTable(0, name)
+        if not self.table:
+            raise Exception('Failed to create table: %s' % name)
+
+        typemap = {
+            int: omero.grid.LongArrayColumn,
+            long: omero.grid.LongArrayColumn,
+            float: omero.grid.DoubleArrayColumn,
+            str: omero.grid.StringColumn,
+            }
+
+        coldef = []
+        for d in column_desc:
+            type, name, size = d
+            coldef.append(typemap[type](name, '', size))
+
+        self.table.initialize(coldef)
+        self.cols = self.table.getHeaders()
+        if not self.cols:
+            raise Exception('Failed to get columns for table ID:%d' % tid)
+
     def open_table(self, tid):
         self.table = self.session.sharedResources().openTable(
             omero.model.OriginalFileI(tid))
@@ -95,6 +118,14 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
         data = self.table.readCoordinates(offs)
         values = [c.values for c in data.columns]
         return values
+
+    @staticmethod
+    def desc_to_str(d):
+        def esc(s):
+            return s.replace('\\', '\\\\').replace('_', '\\_').replace(
+                '=', '\\=')
+        s = '_'.join('%s=%s' % (esc(k), esc(d[k])) for k in sorted(d.keys()))
+        return s
 
 
 class LRUCache(object):

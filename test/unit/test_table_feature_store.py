@@ -21,6 +21,7 @@
 
 import pytest
 import mox
+import itertools
 
 import omero
 from omero.rtypes import unwrap, wrap
@@ -67,9 +68,15 @@ class MockMapAnnotation:
 
 
 class MockSharedResources:
-    def __init__(self, tid, table):
+    def __init__(self, tid, table, tname):
         self.tid = tid
         self.table = table
+        self.tname = tname
+
+    def newTable(self, repoid, name):
+        assert isinstance(repoid, int)
+        assert isinstance(name, str)
+        return self.table
 
     def openTable(self, o):
         assert isinstance(o, omero.model.OriginalFileI)
@@ -78,8 +85,8 @@ class MockSharedResources:
 
 
 class MockSession:
-    def __init__(self, tid, table):
-        self.msr = MockSharedResources(tid, table)
+    def __init__(self, tid, table, tname):
+        self.msr = MockSharedResources(tid, table, tname)
 
     def sharedResources(self):
         return self.msr
@@ -112,6 +119,9 @@ class MockTable:
         pass
 
     def close(self):
+        pass
+
+    def initialize(self, desc):
         pass
 
     def getNumberOfRows(self):
@@ -176,9 +186,49 @@ class TestFeatureSetFileStore(object):
         assert store.get_table() == table
         self.mox.VerifyAll()
 
+    def test_new_table(self):
+        def comparecol(x, y):
+            return all([
+                type(x) == type(y),
+                x.name == y.name,
+                x.description == y.description,
+                x.size == y.size,
+                x.values == y.values
+            ])
+
+        def comparecols(xs, ys):
+            return all([comparecol(x, y) for x, y in itertools.izip(xs, ys)])
+
+        table = self.mox.CreateMock(MockTable)
+        session = MockSession(1, table, 'table-name')
+        store = MockFeatureSetTableStore(session, None, None)
+
+        tcols = [
+            omero.grid.LongArrayColumn('Integers', '', 1),
+            omero.grid.LongArrayColumn('Longs', '', 2),
+            omero.grid.DoubleArrayColumn('Floats', '', 3),
+            omero.grid.StringColumn('String', '', 4),
+        ]
+        table.initialize(mox.Func(lambda xs: comparecols(xs, tcols)))
+        table.getHeaders().AndReturn(tcols)
+
+        desc = [
+            (int, 'Integers', 1),
+            (long, 'Longs', 2),
+            (float, 'Floats', 3),
+            (str, 'String', 4),
+        ]
+
+        self.mox.ReplayAll()
+
+        store.new_table(desc)
+        assert store.table == table
+        assert store.cols == tcols
+        self.mox.VerifyAll()
+
     def test_open_table(self):
         table = self.mox.CreateMock(MockTable)
-        session = MockSession(1, table)
+        session = MockSession(1, table, None)
         store = MockFeatureSetTableStore(session, None, None)
         cols = [object]
 
@@ -253,6 +303,11 @@ class TestFeatureSetFileStore(object):
 
         assert store.fetch(rowquery) == [values]
         self.mox.VerifyAll()
+
+    def test_desc_to_str(self):
+        d = {'a':'b=c', 'd=e':'f', r'g_\h':r'\=i'}
+        s = OmeroTablesFeatureStore.FeatureSetTableStore.desc_to_str(d)
+        assert s == r'a=b\=c_d\=e=f_g\_\\h=\\\=i'
 
 
 class TestFeatureTableStore(object):
