@@ -31,6 +31,9 @@ from omero.rtypes import unwrap
 import itertools
 
 
+DEFAULT_NAMESPACE = 'omero.features'
+
+
 class FeatureSetTableStore(AbstractFeatureSetStorage):
     """
     A single feature set.
@@ -57,10 +60,12 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
         a = self.ma.query_by_map_ann(dict(self.fsmeta.items()))
         if len(a) < 1:
             raise Exception(
-                'No annotations found for: %s' % str(self.fsmeta))
+                'No annotations found for: ns:%s %s' % (
+                self.ma.namespace, str(self.fsmeta)))
         if len(a) > 1:
             raise Exception(
-                'Multiple annotations found for: %s' % str(self.fsmeta))
+                'Multiple annotations found for: ns:%s %s' % (
+                self.ma.namespace, str(self.fsmeta)))
         tid = long(unwrap(a[0].getMapValue()['_tableid']))
         self.open_table(tid)
         return self.table
@@ -175,7 +180,7 @@ class LRUCache(object):
         key = None
         c = self.counter
         for k, v in self.cache.iteritems():
-            if v[1] < c:
+            if v[1] <= c:
                 c = v[1]
                 key = k
         del self.cache[key]
@@ -189,14 +194,15 @@ class LRUTableCache(LRUCache):
         key = None
         c = self.counter
         for k, v in self.cache.iteritems():
-            if v[1] < c:
+            if v[1] <= c:
                 c = v[1]
                 key = k
-        self.cache[key].close()
+        self.cache[key][0].close()
         del self.cache[key]
 
     def close(self):
         while self.cache:
+            print 'close', self.cache
             self.remove_oldest()
 
 
@@ -207,7 +213,7 @@ class FeatureTableStore(AbstractFeatureStorage):
 
     def __init__(self, session, **kwargs):
         self.session = session
-        self.namespace = kwargs.get('namespace', 'omero.features')
+        self.namespace = kwargs.get('namespace', DEFAULT_NAMESPACE)
         self.cachesize = kwargs.get('cachesize', 10)
         self.ma = OmeroMetadata.MapAnnotations(session, self.namespace)
         self.fss = LRUTableCache(kwargs.get('cachesize', 10))
@@ -216,14 +222,13 @@ class FeatureTableStore(AbstractFeatureStorage):
         fskey = tuple(sorted(fsmeta.iteritems()))
         r = self.fss.get(fskey)
         if not r:
-            r = FeatureSetTableStore(fsmeta)
+            r = FeatureSetTableStore(self.session, self.namespace, fsmeta)
             self.fss.insert(fskey, r)
         return r
 
-    def store(self, fsmetas, rowmetas, values):
-        for fsmeta, values in itertools.izip(fsmetas, values):
-            fs = self.get_feature_set(fsmeta)
-            fs.store(rowmetas, values)
+    def store(self, fsmeta, rowmetas, values):
+        fs = self.get_feature_set(fsmeta)
+        fs.store(rowmetas, values)
 
     def fetch(self, fsquery, rowquery):
         fs = self.get_feature_set(fsquery)
