@@ -147,7 +147,7 @@ class MockFeatureSetTableStore(OmeroTablesFeatureStore.FeatureSetTableStore):
         self.header = None
 
 
-class TestFeatureSetFileStore(object):
+class TestFeatureSetTableStore(object):
 
     def setup_method(self, method):
         self.mox = mox.Mox()
