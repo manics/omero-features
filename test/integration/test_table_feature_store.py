@@ -34,7 +34,7 @@ from features import OmeroTablesFeatureStore
 
 class FeatureSetTableStoreProxy(OmeroTablesFeatureStore.FeatureSetTableStore):
     """
-    Replaces __init__ so the get_table() isn't called
+    Replaces __init__ so that get_table() isn't called
     """
     def __init__(self, session, namespace, fsmeta):
         self.session = session
@@ -42,6 +42,38 @@ class FeatureSetTableStoreProxy(OmeroTablesFeatureStore.FeatureSetTableStore):
         self.fsmeta = fsmeta
         self.table = None
         self.header = None
+
+
+class TableStoreHelper(object):
+    @staticmethod
+    def assert_coltypes_equal(xs, ys):
+        for x, y in itertools.izip(xs, ys):
+            assert isinstance(x, omero.grid.Column)
+            assert isinstance(y, omero.grid.Column)
+            assert type(x) == type(y)
+            assert x.name == y.name
+            assert x.description == y.description
+            assert x.size == y.size
+
+    @staticmethod
+    def create_table(sess, ns, fsmeta):
+        table = sess.sharedResources().newTable(0, 'test.h5')
+        cols = [
+            omero.grid.LongArrayColumn('test1', '', 2),
+            omero.grid.DoubleArrayColumn('test2', '', 1)
+            ]
+        table.initialize(cols)
+        tid = str(unwrap(table.getOriginalFile().getId()))
+        table.close()
+
+        m = omero.model.MapAnnotationI()
+        m.setNs(wrap(ns))
+        d = dict((k, v) for k, v in fsmeta.iteritems())
+        d['_tableid'] = tid
+        m.setMapValue(wrap(d).val)
+        m = sess.getUpdateService().saveAndReturnObject(m)
+
+        return tid, cols
 
 
 class TestFeatureSetTableStore(object):
@@ -62,47 +94,18 @@ class TestFeatureSetTableStore(object):
     def teardown_method(self, method):
         self.cli.closeSession()
 
-    @staticmethod
-    def assert_cols_equal(xs, ys):
-        for x, y in itertools.izip(xs, ys):
-            assert isinstance(x, omero.grid.Column)
-            assert isinstance(y, omero.grid.Column)
-            assert type(x) == type(y)
-            assert x.name == y.name
-            assert x.description == y.description
-            assert x.size == y.size
-            assert (not x.values and not y.values) or (x.values == y.values)
-
-    def create_table(self, ns):
-        table = self.sess.sharedResources().newTable(0, 'test.h5')
-        cols = [
-            omero.grid.LongArrayColumn('test1', '', 2),
-            omero.grid.DoubleArrayColumn('test2', '', 1)
-            ]
-        table.initialize(cols)
-        tid = str(unwrap(table.getOriginalFile().getId()))
-        table.close()
-
-        m = omero.model.MapAnnotationI()
-        m.setNs(wrap(ns))
-        d = dict((k, v) for k, v in self.fsmeta.iteritems())
-        d['_tableid'] = tid
-        m.setMapValue(wrap(d).val)
-        m = self.sess.getUpdateService().saveAndReturnObject(m)
-
-        return tid, cols
-
     @pytest.mark.parametrize('exists', [True, False])
     def test_get_table(self, exists):
         ns = UserAccount.uuid()
         store = FeatureSetTableStoreProxy(self.sess, ns, self.fsmeta)
 
         if exists:
-            tid, tcols = self.create_table(ns)
+            tid, tcols = TableStoreHelper.create_table(
+                self.sess, ns, self.fsmeta)
             table = store.get_table()
 
             assert table and table == store.table
-            self.assert_cols_equal(store.cols, tcols)
+            TableStoreHelper.assert_coltypes_equal(store.cols, tcols)
         else:
             with pytest.raises(Exception):
                 store.get_table()
@@ -128,7 +131,7 @@ class TestFeatureSetTableStore(object):
         store = FeatureSetTableStoreProxy(self.sess, ns, self.fsmeta)
         store.new_table(desc)
         assert store.table
-        self.assert_cols_equal(store.cols, tcols)
+        TableStoreHelper.assert_coltypes_equal(store.cols, tcols)
 
         tid = unwrap(store.table.getOriginalFile().getId())
 
@@ -148,20 +151,20 @@ class TestFeatureSetTableStore(object):
 
     def test_open_table(self):
         ns = UserAccount.uuid()
-        tid, tcols = self.create_table(ns)
+        tid, tcols = TableStoreHelper.create_table(self.sess, ns, self.fsmeta)
 
         store = FeatureSetTableStoreProxy(self.sess, ns, self.fsmeta)
         store.open_table(tid)
         assert store.table
-        self.assert_cols_equal(store.cols, tcols)
+        TableStoreHelper.assert_coltypes_equal(store.cols, tcols)
 
     def test_store1(self):
         ns = UserAccount.uuid()
-        tid, tcols = self.create_table(ns)
+        tid, tcols = TableStoreHelper.create_table(self.sess, ns, self.fsmeta)
 
         store = OmeroTablesFeatureStore.FeatureSetTableStore(
             self.sess, ns, self.fsmeta)
-        self.assert_cols_equal(store.cols, tcols)
+        TableStoreHelper.assert_coltypes_equal(store.cols, tcols)
         assert store.table.getNumberOfRows() == 0
 
         rowmeta = {'objectid': 4}
@@ -199,11 +202,11 @@ class TestFeatureSetTableStore(object):
 
     def test_store(self):
         ns = UserAccount.uuid()
-        tid, tcols = self.create_table(ns)
+        tid, tcols = TableStoreHelper.create_table(self.sess, ns, self.fsmeta)
 
         store = OmeroTablesFeatureStore.FeatureSetTableStore(
             self.sess, ns, self.fsmeta)
-        self.assert_cols_equal(store.cols, tcols)
+        TableStoreHelper.assert_coltypes_equal(store.cols, tcols)
         assert store.table.getNumberOfRows() == 0
 
         rowmetas = [{'objectid': 4}, {'objectid': 5}]
@@ -249,11 +252,11 @@ class TestFeatureSetTableStore(object):
 
     def test_fetch(self):
         ns = UserAccount.uuid()
-        tid, tcols = self.create_table(ns)
+        tid, tcols = TableStoreHelper.create_table(self.sess, ns, self.fsmeta)
 
         store = OmeroTablesFeatureStore.FeatureSetTableStore(
             self.sess, ns, self.fsmeta)
-        self.assert_cols_equal(store.cols, tcols)
+        TableStoreHelper.assert_coltypes_equal(store.cols, tcols)
         assert store.table.getNumberOfRows() == 0
 
         rowmetas = [{'objectid': '4'}, {'objectid': '5'}]
@@ -267,3 +270,59 @@ class TestFeatureSetTableStore(object):
         rowquery = {'objectid': ['4', '5']}
         data = store.fetch(rowquery)
         assert data == valuess
+
+        store.close()
+
+
+class TestFeatureTableStore(object):
+
+    def setup_class(self):
+        self.ua = UserAccount()
+        self.user = self.ua.new_user()
+
+    def teardown_class(self):
+        self.ua.close()
+
+    def setup_method(self, method):
+        self.cli = omero.client()
+        un = unwrap(self.user.getOmeName())
+        self.sess = self.cli.createSession(un, un)
+        self.fsmeta = {'fsname': 'a', 'version': '1'}
+        self.rowmetas = [{'id': '1'}, {'id': '2'}]
+        self.valuess = [[1.0, 2.0], [-1.0, -2.0]]
+
+    def teardown_method(self, method):
+        self.cli.closeSession()
+
+    def test_get_feature_set(self):
+        ns = UserAccount.uuid()
+        tid, tcols = TableStoreHelper.create_table(self.sess, ns, self.fsmeta)
+        fts = OmeroTablesFeatureStore.FeatureTableStore(
+            self.sess, namespace=ns, cachesize=1)
+        store = fts.get_feature_set(self.fsmeta)
+
+        assert store.table
+        TableStoreHelper.assert_coltypes_equal(store.cols, tcols)
+        fts.close()
+
+    def test_store_fetch(self):
+        ns = UserAccount.uuid()
+        tid, tcols = TableStoreHelper.create_table(self.sess, ns, self.fsmeta)
+        fts = OmeroTablesFeatureStore.FeatureTableStore(
+            self.sess, namespace=ns, cachesize=1)
+
+        rowmetas = [{'objectid': 4}, {'objectid': 5}]
+        valuess = [([1, 2], [-1.0]), ([3, 4], [-2.0])]
+        fts.store(self.fsmeta, rowmetas, valuess)
+
+        assert len(fts.fss) == 1
+
+        store = fts.get_feature_set(self.fsmeta)
+        assert store.table
+        TableStoreHelper.assert_coltypes_equal(store.cols, tcols)
+
+        rowquery = {'objectid': ['4', '5']}
+        data = store.fetch(rowquery)
+        assert data == valuess
+
+        fts.close()
