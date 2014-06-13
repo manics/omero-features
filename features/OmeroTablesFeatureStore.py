@@ -61,7 +61,9 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
         if len(a) > 1:
             raise Exception(
                 'Multiple annotations found for: %s' % str(self.fsmeta))
-        return self.open_table(unwrap(a[0].getMapValue()['_tableid']))
+        tid = long(unwrap(a[0].getMapValue()['_tableid']))
+        self.open_table(tid)
+        return self.table
 
     def new_table(self, column_desc):
         meta = dict(self.fsmeta.items())
@@ -109,11 +111,11 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
         # TODO Check only one row in values
         off = self.table.getNumberOfRows()
         for n in xrange(len(self.cols)):
-            self.cols[n].values = values[n]
+            self.cols[n].values = [values[n]]
         self.table.addData(self.cols)
         tid = unwrap(self.get_table().getOriginalFile().getId())
         self.ma.create_map_ann(dict(
-            [('_tableid', tid), ('_offset', off)] + rowmeta.items()))
+            [('_tableid', str(tid)), ('_offset', str(off))] + rowmeta.items()))
 
     def store(self, rowmetas, values):
         for (rowmeta, value) in itertools.izip(rowmetas, values):
@@ -122,11 +124,16 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
     def fetch(self, rowquery):
         tid = unwrap(self.get_table().getOriginalFile().getId())
         anns = self.ma.query_by_map_ann(dict(
-            rowquery.items() + [('_tableid', tid)]))
-        offs = [unwrap(a.getMapValue()['_offset']) for a in anns]
+            rowquery.items() + [('_tableid', str(tid))]))
+        offs = [long(unwrap(a.getMapValue()['_offset'])) for a in anns]
         data = self.table.readCoordinates(offs)
         values = [c.values for c in data.columns]
-        return values
+        # Convert into row-wise storage
+        print values
+        if len(values) > 1:
+            return zip(*values)
+        else:
+            return tuple(values)
 
     @staticmethod
     def desc_to_str(d):
