@@ -20,85 +20,13 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 import pytest
-import uuid
+
+from integration_test_lib import UserAccount
 
 import omero
-from omero.rtypes import rstring, wrap, unwrap
+from omero.rtypes import wrap, unwrap
 
 from features import OmeroMetadata
-
-
-class UserAccount(object):
-    """
-    Copied from components/tools/OmeroPy/test/integration/library.py
-    """
-
-    def __init__(self):
-        self.root = omero.client()
-        self.root.setAgent(__name__)
-        rootpass = self.root.getProperty('omero.rootpass')
-        self.root.createSession('root', rootpass)
-
-    def close(self):
-        self.root.closeSession()
-
-    @staticmethod
-    def uuid():
-        return str(uuid.uuid4())
-
-    def new_user(self, group=None, perms=None,
-                 admin=False, system=False):
-        """
-        admin: If user is to be an admin of the created group
-        system: If user is to be a system admin
-        """
-
-        if not self.root:
-            raise Exception('No root client. Cannot create user')
-
-        adminService = self.root.getSession().getAdminService()
-        name = self.uuid()
-
-        # Create group if necessary
-        if not group:
-            g = self.new_group(perms=perms)
-            group = g.name.val
-        else:
-            g, group = self.group_and_name(group)
-
-        # Create user
-        e = omero.model.ExperimenterI()
-        e.omeName = rstring(name)
-        e.firstName = rstring(name)
-        e.lastName = rstring(name)
-        uid = adminService.createUser(e, group)
-        e = adminService.lookupExperimenter(name)
-        if admin:
-            adminService.setGroupOwner(g, e)
-        if system:
-            adminService.addGroups(e,
-                                   [omero.model.ExperimenterGroupI(0, False)])
-
-        return adminService.getExperimenter(uid)
-
-    def new_group(self, experimenters=None, perms=None):
-        admin = self.root.sf.getAdminService()
-        gname = self.uuid()
-        group = omero.model.ExperimenterGroupI()
-        group.name = rstring(gname)
-        if perms:
-            group.details.permissions = omero.model.PermissionsI(perms)
-        gid = admin.createGroup(group)
-        group = admin.getGroup(gid)
-        self.add_experimenters(group, experimenters)
-        return group
-
-    def add_experimenters(self, group, experimenters):
-        admin = self.root.sf.getAdminService()
-        if experimenters:
-            for exp in experimenters:
-                user, name = self.user_and_name(exp)
-                admin.addGroups(user, [group])
 
 
 class TestMapAnnotations(object):
