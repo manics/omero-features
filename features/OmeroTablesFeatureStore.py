@@ -61,11 +61,11 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
         if len(a) < 1:
             raise Exception(
                 'No annotations found for: ns:%s %s' % (
-                self.ma.namespace, str(self.fsmeta)))
+                    self.ma.namespace, str(self.fsmeta)))
         if len(a) > 1:
             raise Exception(
                 'Multiple annotations found for: ns:%s %s' % (
-                self.ma.namespace, str(self.fsmeta)))
+                    self.ma.namespace, str(self.fsmeta)))
         tid = long(unwrap(a[0].getMapValue()['_tableid']))
         self.open_table(tid)
         return self.table
@@ -127,6 +127,7 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
             self.store1(rowmeta, value)
 
     def fetch(self, rowquery):
+        # TODO Return row metadata
         tid = unwrap(self.get_table().getOriginalFile().getId())
         anns = self.ma.query_by_map_ann(dict(
             rowquery.items() + [('_tableid', str(tid))]))
@@ -231,6 +232,7 @@ class FeatureTableStore(AbstractFeatureStorage):
         fs.store(rowmetas, values)
 
     def fetch(self, fsquery, rowquery):
+        # TODO Return row metadata
         fs = self.get_feature_set(fsquery)
         return fs.fetch(rowquery)
 
