@@ -80,7 +80,8 @@ class PyTest(TestCommand):
         errno = pytest.main(self.test_args)
         sys.exit(errno)
 
-VERSION = get_git_version()
+from features import __file__ as module_file
+VERSION = get_git_version(module_file)
 ZIP_SAFE = True
 
 
