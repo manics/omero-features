@@ -204,6 +204,8 @@ class TestFeatureSetFileStore(object):
         store = MockFeatureSetTableStore(session, None, None)
         self.mox.StubOutWithMock(store.ma, 'create_map_ann')
 
+        table.getOriginalFile().AndReturn(MockOriginalFile(1))
+
         tcols = [
             omero.grid.LongArrayColumn('Integers', '', 1),
             omero.grid.LongArrayColumn('Longs', '', 2),
@@ -213,7 +215,6 @@ class TestFeatureSetFileStore(object):
         table.initialize(mox.Func(lambda xs: comparecols(xs, tcols)))
         table.getHeaders().AndReturn(tcols)
 
-        table.getOriginalFile().AndReturn(MockOriginalFile(1))
         store.ma.create_map_ann({'fsname': 'a', '_tableid': '1'})
 
         desc = [
@@ -309,7 +310,7 @@ class TestFeatureSetFileStore(object):
         self.mox.VerifyAll()
 
     def test_desc_to_str(self):
-        d = {'a':'b=c', 'd=e':'f', r'g_\h':r'\=i'}
+        d = {'a': 'b=c', 'd=e': 'f', r'g_\h': r'\=i'}
         s = OmeroTablesFeatureStore.FeatureSetTableStore.desc_to_str(d)
         assert s == r'a=b\=c_d\=e=f_g\_\\h=\\\=i'
 

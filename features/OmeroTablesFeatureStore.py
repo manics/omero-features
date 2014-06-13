@@ -73,6 +73,7 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
         self.table = self.session.sharedResources().newTable(0, name)
         if not self.table:
             raise Exception('Failed to create table: %s' % name)
+        tid = unwrap(self.table.getOriginalFile().getId())
 
         typemap = {
             int: omero.grid.LongArrayColumn,
@@ -91,7 +92,7 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
         if not self.cols:
             raise Exception('Failed to get columns for table ID:%d' % tid)
 
-        meta['_tableid'] = str(unwrap(self.table.getOriginalFile().getId()))
+        meta['_tableid'] = str(tid)
         self.ma.create_map_ann(meta)
 
     def open_table(self, tid):
