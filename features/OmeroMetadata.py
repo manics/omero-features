@@ -86,6 +86,7 @@ class MapAnnotations(object):
             # Each [id, key, value] is returned separately, use order by to
             # ensure all keys/values for an annotation are consecutive
             q += ' order by ann.id'
+            print q
             anns = qs.projection(q, params)
 
             # iikvs: A map of ids:((id, key, value), ...)
