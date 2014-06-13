@@ -54,6 +54,7 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
             self.table = None
 
     def get_table(self):
+        # TODO use query projection
         if self.table:
             assert self.cols
             return self.table
@@ -128,6 +129,7 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
 
     def fetch(self, rowquery):
         # TODO Return row metadata
+        # TODO use query projection
         tid = unwrap(self.get_table().getOriginalFile().getId())
         anns = self.ma.query_by_map_ann(dict(
             rowquery.items() + [('_tableid', str(tid))]))
