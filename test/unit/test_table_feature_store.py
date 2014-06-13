@@ -346,7 +346,8 @@ class TestFeatureTableStore(object):
             fts.fss.get(fskey).AndReturn(fs)
         else:
             fts.fss.get(fskey).AndReturn(None)
-            OmeroTablesFeatureStore.FeatureSetTableStore(fsmeta).AndReturn(fs)
+            OmeroTablesFeatureStore.FeatureSetTableStore(
+                None, 'omero.features', fsmeta).AndReturn(fs)
             fts.fss.insert(fskey, fs)
         self.mox.ReplayAll()
 
@@ -357,23 +358,18 @@ class TestFeatureTableStore(object):
         fts = OmeroTablesFeatureStore.FeatureTableStore(None)
         self.mox.StubOutWithMock(fts, 'get_feature_set')
 
-        fsmetas = [{'fsname': 'a'}, {'fsname': 'b', 'x': '1'}]
+        fsmeta = {'fsname': 'a'}
         rowmetas = [{'objectid': 1}, {'objectid': 2}]
-        values1 = [[1], [2]]
-        values2 = [[3], [4]]
+        values = [[1], [2]]
 
-        fs1 = MockFeatureSetTableStore(None, None, fsmetas[0])
-        fs2 = MockFeatureSetTableStore(None, None, fsmetas[1])
-        self.mox.StubOutWithMock(fs1, 'store')
-        self.mox.StubOutWithMock(fs2, 'store')
+        fs = MockFeatureSetTableStore(None, None, fsmeta)
+        self.mox.StubOutWithMock(fs, 'store')
 
-        fts.get_feature_set(fsmetas[0]).AndReturn(fs1)
-        fs1.store(rowmetas, values1)
-        fts.get_feature_set(fsmetas[1]).AndReturn(fs2)
-        fs2.store(rowmetas, values2)
+        fts.get_feature_set(fsmeta).AndReturn(fs)
+        fs.store(rowmetas, values)
         self.mox.ReplayAll()
 
-        fts.store(fsmetas, rowmetas, [values1, values2])
+        fts.store(fsmeta, rowmetas, values)
         self.mox.VerifyAll()
 
     def test_fetch(self):
