@@ -32,6 +32,8 @@ import itertools
 
 
 DEFAULT_NAMESPACE = 'omero.features'
+DEFAULT_COLUMN_SUBSPACE = '/featureset'
+DEFAULT_ROW_SUBSPACE = '/sample'
 
 
 class FeatureSetTableStore(AbstractFeatureSetStorage):
@@ -40,9 +42,10 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
     Each element is a fixed width array of doubles
     """
 
-    def __init__(self, session, namespace, fsmeta):
+    def __init__(self, session, column_space, row_space, fsmeta):
         self.session = session
-        self.ma = OmeroMetadata.MapAnnotations(session, namespace)
+        self.cma = OmeroMetadata.MapAnnotations(session, column_space)
+        self.rma = OmeroMetadata.MapAnnotations(session, row_space)
         self.fsmeta = fsmeta
         self.table = None
         self.header = None
@@ -58,15 +61,15 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
         if self.table:
             assert self.cols
             return self.table
-        a = self.ma.query_by_map_ann(dict(self.fsmeta.items()))
+        a = self.cma.query_by_map_ann(dict(self.fsmeta.items()))
         if len(a) < 1:
             raise Exception(
                 'No annotations found for: ns:%s %s' % (
-                    self.ma.namespace, str(self.fsmeta)))
+                    self.cma.namespace, str(self.fsmeta)))
         if len(a) > 1:
             raise Exception(
                 'Multiple annotations found for: ns:%s %s' % (
-                    self.ma.namespace, str(self.fsmeta)))
+                    self.cma.namespace, str(self.fsmeta)))
         tid = long(unwrap(a[0].getMapValue()['_tableid']))
         self.open_table(tid)
         return self.table
@@ -101,7 +104,7 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
             raise Exception('Failed to get columns for table ID:%d' % tid)
 
         meta['_tableid'] = str(tid)
-        self.ma.create_map_ann(meta)
+        self.cma.create_map_ann(meta)
 
     def open_table(self, tid):
         self.table = self.session.sharedResources().openTable(
@@ -120,7 +123,7 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
             self.cols[n].values = [values[n]]
         self.table.addData(self.cols)
         tid = unwrap(self.get_table().getOriginalFile().getId())
-        self.ma.create_map_ann(dict(
+        self.rma.create_map_ann(dict(
             [('_tableid', str(tid)), ('_offset', str(off))] + rowmeta.items()))
 
     def store(self, rowmetas, values):
@@ -131,7 +134,7 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
         # TODO Return row metadata
         # TODO use query projection
         tid = unwrap(self.get_table().getOriginalFile().getId())
-        anns = self.ma.query_by_map_ann(dict(
+        anns = self.rma.query_by_map_ann(dict(
             rowquery.items() + [('_tableid', str(tid))]))
         offs = [long(unwrap(a.getMapValue()['_offset'])) for a in anns]
         data = self.table.readCoordinates(offs)
@@ -216,16 +219,20 @@ class FeatureTableStore(AbstractFeatureStorage):
 
     def __init__(self, session, **kwargs):
         self.session = session
-        self.namespace = kwargs.get('namespace', DEFAULT_NAMESPACE)
+        namespace = kwargs.get('namespace', DEFAULT_NAMESPACE)
+        self.column_space = kwargs.get(
+            'column_space', namespace + DEFAULT_COLUMN_SUBSPACE)
+        self.row_space = kwargs.get(
+            'row_space', namespace + DEFAULT_ROW_SUBSPACE)
         self.cachesize = kwargs.get('cachesize', 10)
-        self.ma = OmeroMetadata.MapAnnotations(session, self.namespace)
         self.fss = LRUTableCache(kwargs.get('cachesize', 10))
 
     def get_feature_set(self, fsmeta):
         fskey = tuple(sorted(fsmeta.iteritems()))
         r = self.fss.get(fskey)
         if not r:
-            r = FeatureSetTableStore(self.session, self.namespace, fsmeta)
+            r = FeatureSetTableStore(
+                self.session, self.column_space, self.row_space, fsmeta)
             self.fss.insert(fskey, r)
         return r
 
