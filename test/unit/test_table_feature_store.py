@@ -140,7 +140,8 @@ class MockTable:
 class MockFeatureSetTableStore(OmeroTablesFeatureStore.FeatureSetTableStore):
     def __init__(self, session, namespace, fsmeta):
         self.session = session
-        self.ma = OmeroMetadata.MapAnnotations(session, namespace)
+        self.cma = OmeroMetadata.MapAnnotations(session, namespace)
+        self.rma = OmeroMetadata.MapAnnotations(session, namespace)
         self.fsmeta = {'fsname': 'a'}
         self.cols = None
         self.table = None
@@ -170,7 +171,7 @@ class TestFeatureSetTableStore(object):
     def test_get_table(self, opened):
         ann = MockMapAnnotation({'fsname': 'a', '_tableid': '1'})
         store = MockFeatureSetTableStore(None, None, None)
-        self.mox.StubOutWithMock(store.ma, 'query_by_map_ann')
+        self.mox.StubOutWithMock(store.cma, 'query_by_map_ann')
         self.mox.StubOutWithMock(store, 'open_table')
         table = self.mox.CreateMock(MockTable)
 
@@ -178,7 +179,7 @@ class TestFeatureSetTableStore(object):
             store.table = table
             store.cols = object()
         else:
-            store.ma.query_by_map_ann({'fsname': 'a'}).AndReturn([ann])
+            store.cma.query_by_map_ann({'fsname': 'a'}).AndReturn([ann])
             store.open_table(1)
 
         self.mox.ReplayAll()
@@ -204,7 +205,7 @@ class TestFeatureSetTableStore(object):
         table = self.mox.CreateMock(MockTable)
         session = MockSession(1, table, 'table-name')
         store = MockFeatureSetTableStore(session, None, None)
-        self.mox.StubOutWithMock(store.ma, 'create_map_ann')
+        self.mox.StubOutWithMock(store.cma, 'create_map_ann')
 
         table.getOriginalFile().AndReturn(MockOriginalFile(1))
 
@@ -217,7 +218,7 @@ class TestFeatureSetTableStore(object):
         table.initialize(mox.Func(lambda xs: comparecols(xs, tcols)))
         table.getHeaders().AndReturn(tcols)
 
-        store.ma.create_map_ann({'fsname': 'a', '_tableid': '1'})
+        store.cma.create_map_ann({'fsname': 'a', '_tableid': '1'})
 
         desc = [
             (int, 'Integers', 1),
@@ -250,7 +251,7 @@ class TestFeatureSetTableStore(object):
     def test_store1(self):
         table = self.mox.CreateMock(MockTable)
         store = MockFeatureSetTableStore(None, None, None)
-        self.mox.StubOutWithMock(store.ma, 'create_map_ann')
+        self.mox.StubOutWithMock(store.rma, 'create_map_ann')
 
         store.table = table
         cols = [MockColumn]
@@ -262,7 +263,7 @@ class TestFeatureSetTableStore(object):
         table.getOriginalFile().AndReturn(MockOriginalFile(3))
 
         d = {'_tableid': '3', '_offset': '1', 'objectid': '4'}
-        store.ma.create_map_ann(d)
+        store.rma.create_map_ann(d)
         rowmeta = {'objectid': '4'}
         self.mox.ReplayAll()
 
@@ -294,11 +295,11 @@ class TestFeatureSetTableStore(object):
 
         self.mox.StubOutWithMock(table, 'getOriginalFile')
         table.getOriginalFile().AndReturn(MockOriginalFile(1))
-        self.mox.StubOutWithMock(store.ma, 'query_by_map_ann')
+        self.mox.StubOutWithMock(store.rma, 'query_by_map_ann')
 
         rowquery = {'name': 'a'}
         d = dict(rowquery.items() + [('_tableid', '1')])
-        store.ma.query_by_map_ann(d).AndReturn([ann1, ann2])
+        store.rma.query_by_map_ann(d).AndReturn([ann1, ann2])
 
         self.mox.StubOutWithMock(table, 'readCoordinates')
         values = [10, 20]
@@ -330,6 +331,20 @@ class TestFeatureTableStore(object):
     def teardown_method(self, method):
         self.mox.UnsetStubs()
 
+    def test_init(self):
+        fts = OmeroTablesFeatureStore.FeatureTableStore(None)
+        assert fts.column_space == 'omero.features/featureset'
+        assert fts.row_space == 'omero.features/sample'
+
+        fts = OmeroTablesFeatureStore.FeatureTableStore(None, namespace='x')
+        assert fts.column_space == 'x/featureset'
+        assert fts.row_space == 'x/sample'
+
+        fts = OmeroTablesFeatureStore.FeatureTableStore(
+            None, column_space='x', row_space='y')
+        assert fts.column_space == 'x'
+        assert fts.row_space == 'y'
+
     @pytest.mark.parametrize('opened', [True, False])
     def test_get_feature_set(self, opened):
         fs = MockFeatureSetTableStore(None, None, None)
@@ -347,7 +362,8 @@ class TestFeatureTableStore(object):
         else:
             fts.fss.get(fskey).AndReturn(None)
             OmeroTablesFeatureStore.FeatureSetTableStore(
-                None, 'omero.features', fsmeta).AndReturn(fs)
+                None, 'omero.features/featureset', 'omero.features/sample',
+                fsmeta).AndReturn(fs)
             fts.fss.insert(fskey, fs)
         self.mox.ReplayAll()
 
