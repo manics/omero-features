@@ -57,11 +57,11 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
             self.table = None
 
     def get_table(self):
-        # TODO use query projection
         if self.table:
             assert self.cols
             return self.table
-        a = self.cma.query_by_map_ann(dict(self.fsmeta.items()))
+        a = self.cma.query_by_map_ann(
+            dict(self.fsmeta.items()), projection=True)
         if len(a) < 1:
             raise Exception(
                 'No annotations found for: ns:%s %s' % (
@@ -70,7 +70,7 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
             raise Exception(
                 'Multiple annotations found for: ns:%s %s' % (
                     self.cma.namespace, str(self.fsmeta)))
-        tid = long(unwrap(a[0].getMapValue()['_tableid']))
+        tid = long(a.values()[0]['_tableid'])
         self.open_table(tid)
         return self.table
 
@@ -132,11 +132,10 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
 
     def fetch(self, rowquery):
         # TODO Return row metadata
-        # TODO use query projection
         tid = unwrap(self.get_table().getOriginalFile().getId())
         anns = self.rma.query_by_map_ann(dict(
-            rowquery.items() + [('_tableid', str(tid))]))
-        offs = [long(unwrap(a.getMapValue()['_offset'])) for a in anns]
+            rowquery.items() + [('_tableid', str(tid))]), projection=True)
+        offs = [long(a['_offset']) for a in anns.values()]
         data = self.table.readCoordinates(offs)
         values = [c.values for c in data.columns]
         # Convert into row-wise storage

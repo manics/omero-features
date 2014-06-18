@@ -169,7 +169,7 @@ class TestFeatureSetTableStore(object):
 
     @pytest.mark.parametrize('opened', [True, False])
     def test_get_table(self, opened):
-        ann = MockMapAnnotation({'fsname': 'a', '_tableid': '1'})
+        ma = {3: {'fsname': 'a', '_tableid': '1'}}
         store = MockFeatureSetTableStore(None, None, None)
         self.mox.StubOutWithMock(store.cma, 'query_by_map_ann')
         self.mox.StubOutWithMock(store, 'open_table')
@@ -179,7 +179,8 @@ class TestFeatureSetTableStore(object):
             store.table = table
             store.cols = object()
         else:
-            store.cma.query_by_map_ann({'fsname': 'a'}).AndReturn([ann])
+            store.cma.query_by_map_ann(
+                {'fsname': 'a'}, projection=True).AndReturn(ma)
             store.open_table(1)
 
         self.mox.ReplayAll()
@@ -284,10 +285,10 @@ class TestFeatureSetTableStore(object):
         self.mox.VerifyAll()
 
     def test_fetch(self):
-        ann1 = MockMapAnnotation(
-            {'name': 'a', '_tableid': '1', '_offset': '1'})
-        ann2 = MockMapAnnotation(
-            {'name': 'a', '_tableid': '1', '_offset': '6'})
+        mas = {
+            '4': {'name': 'a', '_tableid': '1', '_offset': '1'},
+            '5': {'name': 'a', '_tableid': '1', '_offset': '6'}
+            }
         table = self.mox.CreateMock(MockTable)
         store = MockFeatureSetTableStore(None, None, None)
         store.table = table
@@ -299,7 +300,7 @@ class TestFeatureSetTableStore(object):
 
         rowquery = {'name': 'a'}
         d = dict(rowquery.items() + [('_tableid', '1')])
-        store.rma.query_by_map_ann(d).AndReturn([ann1, ann2])
+        store.rma.query_by_map_ann(d, projection=True).AndReturn(mas)
 
         self.mox.StubOutWithMock(table, 'readCoordinates')
         values = [10, 20]
@@ -307,7 +308,7 @@ class TestFeatureSetTableStore(object):
         col = MockColumn()
         col.values = values
         data.columns = [col]
-        table.readCoordinates([1, 6]).AndReturn(data)
+        table.readCoordinates(mox.SameElementsAs([1, 6])).AndReturn(data)
 
         self.mox.ReplayAll()
 
