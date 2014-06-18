@@ -284,7 +284,8 @@ class TestFeatureSetTableStore(object):
         store.store(rowmetas, values)
         self.mox.VerifyAll()
 
-    def test_fetch(self):
+    @pytest.mark.parametrize('ncols', [1, 2])
+    def test_fetch(self, ncols):
         mas = {
             '4': {'name': 'a', '_tableid': '1', '_offset': '1'},
             '5': {'name': 'a', '_tableid': '1', '_offset': '6'}
@@ -292,7 +293,7 @@ class TestFeatureSetTableStore(object):
         table = self.mox.CreateMock(MockTable)
         store = MockFeatureSetTableStore(None, None, None)
         store.table = table
-        store.cols = [MockColumn()]
+        store.cols = [MockColumn() for n in xrange(ncols)]
 
         self.mox.StubOutWithMock(table, 'getOriginalFile')
         table.getOriginalFile().AndReturn(MockOriginalFile(1))
@@ -303,16 +304,21 @@ class TestFeatureSetTableStore(object):
         store.rma.query_by_map_ann(d, projection=True).AndReturn(mas)
 
         self.mox.StubOutWithMock(table, 'readCoordinates')
-        values = [10, 20]
         data = MockTableData()
-        col = MockColumn()
-        col.values = values
-        data.columns = [col]
+        data.columns = []
+        for n in xrange(ncols):
+            c = MockColumn()
+            c.values = [[10 + n], [20 + n]]
+            data.columns.append(c)
         table.readCoordinates(mox.SameElementsAs([1, 6])).AndReturn(data)
 
         self.mox.ReplayAll()
 
-        assert store.fetch(rowquery) == (values,)
+        rv = store.fetch(rowquery)
+        if ncols == 1:
+            assert rv == [([10],), ([20],)]
+        else:
+            assert rv == [([10], [11]), ([20], [21])]
         self.mox.VerifyAll()
 
     def test_desc_to_str(self):
@@ -394,7 +400,7 @@ class TestFeatureTableStore(object):
         self.mox.StubOutWithMock(fts, 'get_feature_set')
         fsquery = {'name': 'a'}
         rowquery = {'objectid': 1}
-        values = [[1, 2]]
+        values = [([1],), ([2],)]
         fs = MockFeatureSetTableStore(None, None, fsquery)
         self.mox.StubOutWithMock(fs, 'fetch')
 

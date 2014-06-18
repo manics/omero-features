@@ -143,7 +143,7 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
         if len(values) > 1:
             return zip(*values)
         else:
-            return tuple(values)
+            return [tuple([v]) for v in values[0]]
 
     @staticmethod
     def desc_to_str(d):
