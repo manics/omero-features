@@ -135,15 +135,17 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
         tid = unwrap(self.get_table().getOriginalFile().getId())
         anns = self.rma.query_by_map_ann(dict(
             rowquery.items() + [('_tableid', str(tid))]), projection=True)
-        offs = [long(a['_offset']) for a in anns.values()]
+        # anns is a dict of annotation-id:map-value, drop the id
+        mas = anns.values()
+        offs = [long(a['_offset']) for a in mas]
         data = self.table.readCoordinates(offs)
         values = [c.values for c in data.columns]
         # Convert into row-wise storage
         print values
         if len(values) > 1:
-            return zip(*values)
+            return mas, zip(*values)
         else:
-            return [tuple([v]) for v in values[0]]
+            return mas, [tuple([v]) for v in values[0]]
 
     @staticmethod
     def desc_to_str(d):

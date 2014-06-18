@@ -77,6 +77,13 @@ class TableStoreHelper(object):
         return tid, cols
 
 
+def compare_2_2(a, b):
+    assert len(a) == 2
+    assert len(b) == 2
+    return ((a[0] == b[0] and a[1] == b[1]) or
+            (a[0] == b[1] and a[1] == b[0]))
+
+
 class TestFeatureSetTableStore(object):
 
     def setup_class(self):
@@ -257,12 +264,19 @@ class TestFeatureSetTableStore(object):
         store.store(rowmetas, valuess)
 
         rowquery = {'objectid': '4'}
-        data = store.fetch(rowquery)
-        assert data == [valuess[0]]
+        ra, rv = store.fetch(rowquery)
+        assert len(ra) == 1
+        assert len(rv) == 1
+        assert ra[0]['objectid'] == '4'
+        assert rv[0] == valuess[0]
 
         rowquery = {'objectid': ['4', '5']}
-        data = store.fetch(rowquery)
-        assert data == valuess
+        ra, rv = store.fetch(rowquery)
+        # Could be either way round
+        assert len(ra) == 2
+        assert len(rv) == 2
+        assert compare_2_2([ra[0]['objectid'], ra[1]['objectid']], ['4', '5'])
+        assert compare_2_2(rv, valuess)
 
         store.close()
 
@@ -318,7 +332,11 @@ class TestFeatureTableStore(object):
         TableStoreHelper.assert_coltypes_equal(store.cols, tcols)
 
         rowquery = {'objectid': ['4', '5']}
-        data = store.fetch(rowquery)
-        assert data == valuess
+        ra, rv = store.fetch(rowquery)
+        # Could be either way round
+        assert len(ra) == 2
+        assert len(rv) == 2
+        assert compare_2_2([ra[0]['objectid'], ra[1]['objectid']], ['4', '5'])
+        assert compare_2_2(rv, valuess)
 
         fts.close()

@@ -310,11 +310,22 @@ class TestFeatureSetTableStore(object):
             c = MockColumn()
             c.values = [[10 + n], [20 + n]]
             data.columns.append(c)
-        table.readCoordinates(mox.SameElementsAs([1, 6])).AndReturn(data)
+
+        # Need to figure out the order of the dict keys
+        ks = mas.keys()
+        if ks[0] == '4':
+            expected_offsets = [1, 6]
+            expected_ras = [mas['4'], mas['5']]
+        else:
+            expected_offsets = [6, 1]
+            expected_ras = [mas['5'], mas['4']]
+
+        table.readCoordinates(expected_offsets).AndReturn(data)
 
         self.mox.ReplayAll()
 
-        rv = store.fetch(rowquery)
+        ra, rv = store.fetch(rowquery)
+        assert ra == expected_ras
         if ncols == 1:
             assert rv == [([10],), ([20],)]
         else:
@@ -400,14 +411,18 @@ class TestFeatureTableStore(object):
         self.mox.StubOutWithMock(fts, 'get_feature_set')
         fsquery = {'name': 'a'}
         rowquery = {'objectid': 1}
-        values = [([1],), ([2],)]
+        values = [([1], [2])]
         fs = MockFeatureSetTableStore(None, None, fsquery)
         self.mox.StubOutWithMock(fs, 'fetch')
 
         fts.get_feature_set(fsquery).AndReturn(fs)
-        fs.fetch(rowquery).AndReturn(values)
+        fs.fetch(rowquery).AndReturn(([rowquery], values))
 
         self.mox.ReplayAll()
 
-        assert fts.fetch(fsquery, rowquery) == values
+        ra, rv = fts.fetch(fsquery, rowquery)
+        assert len(ra) == 1
+        assert len(rv) == 1
+        assert ra[0] == rowquery
+        assert rv == values
         self.mox.VerifyAll()
