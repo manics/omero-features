@@ -200,7 +200,6 @@ class TestFeatureSetTableStore(object):
         store.close()
 
     def test_store(self):
-        ns = UserAccount.uuid()
         tid, tcols = TableStoreHelper.create_table(
             self.sess, self.nsc, self.fsmeta)
 
