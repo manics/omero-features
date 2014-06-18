@@ -131,7 +131,6 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
             self.store1(rowmeta, value)
 
     def fetch(self, rowquery):
-        # TODO Return row metadata
         tid = unwrap(self.get_table().getOriginalFile().getId())
         anns = self.rma.query_by_map_ann(dict(
             rowquery.items() + [('_tableid', str(tid))]), projection=True)
@@ -242,7 +241,6 @@ class FeatureTableStore(AbstractFeatureStorage):
         fs.store(rowmetas, values)
 
     def fetch(self, fsquery, rowquery):
-        # TODO Return row metadata
         fs = self.get_feature_set(fsquery)
         return fs.fetch(rowquery)
 
