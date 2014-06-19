@@ -185,7 +185,7 @@ class TestMapAnnotations(object):
         assert ma.type_to_str(4L) == 'long:4'
         assert ma.type_to_str('aa') == 'str:aa'
 
-        with pytest.raises(Exception):
+        with pytest.raises(OmeroMetadata.TypeException):
             ma.type_to_str(object())
 
     def test_type_from_str(self):
@@ -196,6 +196,9 @@ class TestMapAnnotations(object):
         assert ma.type_from_str('int:-2') == -2
         assert ma.type_from_str('long:4') == 4L
         assert ma.type_from_str('str:aa') == 'aa'
+
+        with pytest.raises(OmeroMetadata.TypeException):
+            ma.type_from_str('xxx:1')
 
         with pytest.raises(Exception):
             ma.type_from_str('xxx')

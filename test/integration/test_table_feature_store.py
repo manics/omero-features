@@ -119,7 +119,7 @@ class TestFeatureSetTableStore(object):
             assert table and table == store.table
             TableStoreHelper.assert_coltypes_equal(store.cols, tcols)
         else:
-            with pytest.raises(Exception):
+            with pytest.raises(OmeroTablesFeatureStore.TableLookupException):
                 store.get_table()
 
     def test_new_table(self):

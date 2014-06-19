@@ -36,6 +36,37 @@ DEFAULT_COLUMN_SUBSPACE = '/featureset'
 DEFAULT_ROW_SUBSPACE = '/sample'
 
 
+class TableStoreException(Exception):
+    """
+    Parent class for exceptions occuring in the OMERO.features tables store
+    implementation
+    """
+    pass
+
+
+class OmeroTableException(TableStoreException):
+    """
+    Errors whilst using the OMERO.tables API
+    """
+    pass
+
+
+class TableLookupException(TableStoreException):
+    """
+    Errors in retrieving a table, for example due to a mismatch in table
+    annotations
+    """
+    pass
+
+
+class InvalidAnnotationException(TableStoreException):
+    """
+    Errors in the keys or values of an annotation used for linking features
+    and samples
+    """
+    pass
+
+
 class FeatureSetTableStore(AbstractFeatureSetStorage):
     """
     A single feature set.
@@ -63,11 +94,11 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
         a = self.cma.query_by_map_ann(
             dict(self.fsmeta.items()), projection=True)
         if len(a) < 1:
-            raise Exception(
+            raise TableLookupException(
                 'No annotations found for: ns:%s %s' % (
                     self.cma.namespace, str(self.fsmeta)))
         if len(a) > 1:
-            raise Exception(
+            raise TableLookupException(
                 'Multiple annotations found for: ns:%s %s' % (
                     self.cma.namespace, str(self.fsmeta)))
         tid = long(a.values()[0]['_tableid'])
@@ -77,13 +108,13 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
     def new_table(self, column_desc):
         meta = dict(self.fsmeta.items())
         if '_tableid' in meta:
-            raise Exception(
+            raise InvalidAnnotationException(
                 'Reserved key already present in fsmeta: %s', '_tableid')
 
         name = self.desc_to_str(self.fsmeta)
         self.table = self.session.sharedResources().newTable(0, name)
         if not self.table:
-            raise Exception('Failed to create table: %s' % name)
+            raise OmeroTableException('Failed to create table: %s' % name)
         tid = unwrap(self.table.getOriginalFile().getId())
 
         typemap = {
@@ -101,7 +132,8 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
         self.table.initialize(coldef)
         self.cols = self.table.getHeaders()
         if not self.cols:
-            raise Exception('Failed to get columns for table ID:%d' % tid)
+            raise OmeroTableException(
+                'Failed to get columns for table ID:%d' % tid)
 
         meta['_tableid'] = str(tid)
         self.cma.create_map_ann(meta)
@@ -110,10 +142,11 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
         self.table = self.session.sharedResources().openTable(
             omero.model.OriginalFileI(tid))
         if not self.table:
-            raise Exception('Failed to open table ID:%d' % tid)
+            raise OmeroTableException('Failed to open table ID:%d' % tid)
         self.cols = self.table.getHeaders()
         if not self.cols:
-            raise Exception('Failed to get columns for table ID:%d' % tid)
+            raise OmeroTableException(
+                'Failed to get columns for table ID:%d' % tid)
 
     def store1(self, rowmeta, values):
         # TODO Check for existing annotation

@@ -32,13 +32,27 @@ import omero.gateway
 from omero.rtypes import wrap, unwrap
 
 
+class MetadataException(Exception):
+    """
+    Parent class for exceptions occuring in OMERO.features metadata handling
+    """
+    pass
+
+
+class TypeException(MetadataException):
+    """
+    An invalid parameter type
+    """
+    pass
+
+
 class MapAnnotations(object):
 
     def __init__(self, session, namespace=None):
         self.session = session
         self.namespace = namespace
         if namespace is not None and not isinstance(namespace, str):
-            raise Exception('namespace must be a string')
+            raise TypeException('namespace must be a string')
 
     def create_map_ann(self, kvs):
         d = dict((k, wrap(str(v))) for k, v in kvs.iteritems())
@@ -106,7 +120,7 @@ class MapAnnotations(object):
         if t in [bool, float, int, long, str]:
             return '%s:%s' % (t.__name__, x)
         else:
-            raise Exception('Unsupported type: %s' % t)
+            raise TypeException('Unsupported type: %s' % t)
 
     @staticmethod
     def type_from_str(s):
@@ -116,7 +130,7 @@ class MapAnnotations(object):
                 return True
             if x == 'False':
                 return False
-            raise Exception('Invalid bool: %s' % x)
+            raise TypeException('Invalid bool: %s' % x)
         if t == 'float':
             return float(x)
         if t == 'int':
@@ -125,7 +139,7 @@ class MapAnnotations(object):
             return long(x)
         if t == 'str':
             return x
-        raise Exception('Unsupported type: %s' % s)
+        raise TypeException('Unsupported type: %s' % s)
 
     def create_map_ann_multitype(self, kvs):
         d = dict((k, self.type_to_str(v))
