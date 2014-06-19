@@ -51,10 +51,16 @@ class OmeroTableException(TableStoreException):
     pass
 
 
-class TableLookupException(TableStoreException):
+class NoTableMatchException(TableStoreException):
     """
-    Errors in retrieving a table, for example due to a mismatch in table
-    annotations
+    No matching annotation was found when searching for a table
+    """
+    pass
+
+
+class TooManyTablesException(TableStoreException):
+    """
+    Too many matching annotation were found when searching for a table
     """
     pass
 
@@ -106,17 +112,17 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
             dict(self.fsmeta.items()), projection=True)
         if create:
             if len(a) != 0:
-                raise TableLookupException(
+                raise TooManyTablesException(
                     'Annotation already exists for new table: ns:%s %s' % (
                         self.cma.namespace, str(self.fsmeta)))
             self.new_table(create)
         else:
             if len(a) < 1:
-                raise TableLookupException(
+                raise NoTableMatchException(
                     'No annotations found for: ns:%s %s' % (
                         self.cma.namespace, str(self.fsmeta)))
             if len(a) > 1:
-                raise TableLookupException(
+                raise TooManyTablesException(
                     'Multiple annotations found for: ns:%s %s' % (
                         self.cma.namespace, str(self.fsmeta)))
             tid = long(a.values()[0]['_tableid'])
@@ -277,6 +283,12 @@ class FeatureTableStore(AbstractFeatureStorage):
             'row_space', namespace + DEFAULT_ROW_SUBSPACE)
         self.cachesize = kwargs.get('cachesize', 10)
         self.fss = LRUTableCache(kwargs.get('cachesize', 10))
+
+    def create_feature_set(self, fsmeta, col_desc):
+        fskey = tuple(sorted(fsmeta.iteritems()))
+        r = FeatureSetTableStore(
+            self.session, self.column_space, self.row_space, fsmeta, col_desc)
+        self.fss.insert(fskey, r)
 
     def get_feature_set(self, fsmeta):
         fskey = tuple(sorted(fsmeta.iteritems()))

@@ -119,7 +119,7 @@ class TestFeatureSetTableStore(object):
             assert table and table == store.table
             TableStoreHelper.assert_coltypes_equal(store.cols, tcols)
         else:
-            with pytest.raises(OmeroTablesFeatureStore.TableLookupException):
+            with pytest.raises(OmeroTablesFeatureStore.NoTableMatchException):
                 store.get_table()
 
     def test_new_table(self):
@@ -303,6 +303,25 @@ class TestFeatureTableStore(object):
 
     def teardown_method(self, method):
         self.cli.closeSession()
+
+    def test_create_feature_set(self):
+        fts = OmeroTablesFeatureStore.FeatureTableStore(
+            self.sess, namespace=self.ns, cachesize=1)
+
+        with pytest.raises(OmeroTablesFeatureStore.NoTableMatchException):
+            store = fts.get_feature_set(self.fsmeta)
+
+        col_desc = [(int, 'x', 1)]
+        fts.create_feature_set(self.fsmeta, col_desc)
+        store = fts.get_feature_set(self.fsmeta)
+
+        expected_cols = [omero.grid.LongArrayColumn('x', '', 1),]
+        TableStoreHelper.assert_coltypes_equal(store.cols, expected_cols)
+
+        with pytest.raises(OmeroTablesFeatureStore.TooManyTablesException):
+            fts.create_feature_set(self.fsmeta, col_desc)
+
+        fts.close()
 
     def test_get_feature_set(self):
         tid, tcols = TableStoreHelper.create_table(

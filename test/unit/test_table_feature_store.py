@@ -176,7 +176,7 @@ class TestFeatureSetTableStore(object):
         self.mox.StubOutWithMock(store, 'open_table')
         self.mox.StubOutWithMock(store, 'new_table')
         table = self.mox.CreateMock(MockTable)
-        col_desc = {'dummy': 'dummy'}
+        col_desc = [(int, 'x', 1)]
 
         if opened:
             store.table = table
@@ -378,6 +378,25 @@ class TestFeatureTableStore(object):
             None, column_space='x', row_space='y')
         assert fts.column_space == 'x'
         assert fts.row_space == 'y'
+
+    def test_create_feature_set(self):
+        fs = MockFeatureSetTableStore(None, None, None)
+        self.mox.StubOutWithMock(
+            OmeroTablesFeatureStore, 'FeatureSetTableStore')
+        fsmeta = {'version': '1.2.3', 'fsname': 'a'}
+        fskey = (('fsname', 'a'), ('version', '1.2.3'))
+        col_desc = [(int, 'x', 1)]
+        fts = OmeroTablesFeatureStore.FeatureTableStore(None)
+
+        OmeroTablesFeatureStore.FeatureSetTableStore(
+            None, 'omero.features/featureset', 'omero.features/sample',
+            fsmeta, col_desc).AndReturn(fs)
+
+        self.mox.ReplayAll()
+        fts.create_feature_set(fsmeta, col_desc)
+        assert len(fts.fss) == 1
+        assert fts.fss.get(fskey) == fs
+        self.mox.VerifyAll()
 
     @pytest.mark.parametrize('opened', [True, False])
     def test_get_feature_set(self, opened):
