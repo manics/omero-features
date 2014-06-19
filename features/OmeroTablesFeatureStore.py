@@ -67,42 +67,60 @@ class InvalidAnnotationException(TableStoreException):
     pass
 
 
+class TableUsageException(TableStoreException):
+    """
+    Invalid usage of this implementation of the Features API
+    """
+    pass
+
+
 class FeatureSetTableStore(AbstractFeatureSetStorage):
     """
     A single feature set.
     Each element is a fixed width array of doubles
     """
 
-    def __init__(self, session, column_space, row_space, fsmeta):
+    def __init__(self, session, column_space, row_space, fsmeta, create=None):
         self.session = session
         self.cma = OmeroMetadata.MapAnnotations(session, column_space)
         self.rma = OmeroMetadata.MapAnnotations(session, row_space)
         self.fsmeta = fsmeta
         self.table = None
         self.header = None
-        self.get_table()
+        self.get_table(create)
 
     def close(self):
         if self.table:
             self.table.close()
             self.table = None
 
-    def get_table(self):
+    def get_table(self, create=None):
         if self.table:
+            if create:
+                raise TableUsageException(
+                    'New table requested but already open: ns:%s %s' % (
+                        self.cma.namespace, str(self.fsmeta)))
             assert self.cols
             return self.table
         a = self.cma.query_by_map_ann(
             dict(self.fsmeta.items()), projection=True)
-        if len(a) < 1:
-            raise TableLookupException(
-                'No annotations found for: ns:%s %s' % (
-                    self.cma.namespace, str(self.fsmeta)))
-        if len(a) > 1:
-            raise TableLookupException(
-                'Multiple annotations found for: ns:%s %s' % (
-                    self.cma.namespace, str(self.fsmeta)))
-        tid = long(a.values()[0]['_tableid'])
-        self.open_table(tid)
+        if create:
+            if len(a) != 0:
+                raise TableLookupException(
+                    'Annotation already exists for new table: ns:%s %s' % (
+                        self.cma.namespace, str(self.fsmeta)))
+            self.new_table(create)
+        else:
+            if len(a) < 1:
+                raise TableLookupException(
+                    'No annotations found for: ns:%s %s' % (
+                        self.cma.namespace, str(self.fsmeta)))
+            if len(a) > 1:
+                raise TableLookupException(
+                    'Multiple annotations found for: ns:%s %s' % (
+                        self.cma.namespace, str(self.fsmeta)))
+            tid = long(a.values()[0]['_tableid'])
+            self.open_table(tid)
         return self.table
 
     def new_table(self, column_desc):

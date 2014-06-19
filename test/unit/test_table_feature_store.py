@@ -168,26 +168,42 @@ class TestFeatureSetTableStore(object):
         self.mox.VerifyAll()
 
     @pytest.mark.parametrize('opened', [True, False])
-    def test_get_table(self, opened):
+    @pytest.mark.parametrize('create', [True, False])
+    def test_get_table(self, opened, create):
         ma = {3: {'fsname': 'a', '_tableid': '1'}}
         store = MockFeatureSetTableStore(None, None, None)
         self.mox.StubOutWithMock(store.cma, 'query_by_map_ann')
         self.mox.StubOutWithMock(store, 'open_table')
+        self.mox.StubOutWithMock(store, 'new_table')
         table = self.mox.CreateMock(MockTable)
+        col_desc = {'dummy': 'dummy'}
 
         if opened:
             store.table = table
             store.cols = object()
         else:
-            store.cma.query_by_map_ann(
-                {'fsname': 'a'}, projection=True).AndReturn(ma)
-            store.open_table(1)
+            if create:
+                store.cma.query_by_map_ann(
+                    {'fsname': 'a'}, projection=True).AndReturn({})
+                store.new_table(col_desc)
+            else:
+                store.cma.query_by_map_ann(
+                    {'fsname': 'a'}, projection=True).AndReturn(ma)
+                store.open_table(1)
 
         self.mox.ReplayAll()
 
         # open_table is mocked so it won't set store.table
         # assert store.get_table() == table
-        store.get_table()
+        if create:
+            if opened:
+                with pytest.raises(
+                        OmeroTablesFeatureStore.TableUsageException):
+                    store.get_table(col_desc)
+            else:
+                store.get_table(col_desc)
+        else:
+            store.get_table()
         self.mox.VerifyAll()
 
     def test_new_table(self):
