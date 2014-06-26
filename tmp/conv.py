@@ -8,6 +8,12 @@ import numpy as np
 import os
 import re
 
+import features
+import features.OmeroTablesFeatureStore
+
+
+combinefs = False
+
 
 def loadnp(f, create=False):
     d = np.load(f)
@@ -66,27 +72,84 @@ def split_into_featuresets(names, values):
     return featuresets
 
 
-def store_featuresets(featuresets, version, sample, timestamp, create):
+def store_featuresets(featuresets, version, sample, timestamp, create=False):
     for name, values in featuresets.iteritems():
         fsmeta = {
             'name': name,
             'version': version,
-            #'datetime-calculated': timestamp
         }
+        rowmeta = sample
 
         print
         print 'Feature dict: %s' % fsmeta
         print 'Sample dict: %s ' % sample
         print 'Feature values: %s' % str(values)
 
-        if create == 'individual':
-            col_desc = [double, name, len(values)]
-            # store.
+        if not combinefs:
+            if create:
+                col_desc = [(float, name, len(values))]
+                store.create_feature_set(fsmeta, col_desc)
+            store.store(fsmeta, [rowmeta], [(values,)])
+
+    #store.store(fsmeta, sample, [values])
 
 
-    store.store(fsmeta, sample, [values])
+def list_samples(q=None, projection=True):
+    if not q:
+        q = {}
+    ma = features.OmeroMetadata.MapAnnotations(
+        client.getSession(), store.row_space)
+    return ma.query_by_map_ann(q, projection=projection)
+
+
+def list_featuresets(q=None, projection=True):
+    if not q:
+        q = {}
+    ma = features.OmeroMetadata.MapAnnotations(
+        client.getSession(), store.column_space)
+    return ma.query_by_map_ann(q, projection=projection)
+
+
+def delete_feature_table(tableid):
+    #def delete(otype, oids):
+        #h = conn.deleteObjects('OriginalFile', oids)
+        #print 'Deleting %s: %s' % (otype, oids)
+        #try:
+        #    conn._waitOnCmd(h)
+        #    for r in h.getResponse().responses:
+        #        print 'Scheduled: %d Actual: %d' % (
+        #            r.scheduledDeletes, r.actualDeletes)
+        #except omero.CmdError as e:
+        #    print 'omero.CmdError: %s' % e
+        #finally:
+        #    h.close()
+    rowanns = list_samples({'_tableid': str(tableid)}, False)
+    colanns = list_featuresets({'_tableid': str(tableid)}, False)
+    conn = omero.gateway.BlitzGateway(client_obj=client)
+
+    #delete('MapAnnotation', rowanns.keys() + colanns.keys())
+    #delete('OriginalFile', [tableid])
+    #dcs = []
+    #dcs.append(omero.cmd.Delete('/OriginalFile', tableid))
+    #for aid in rowanns.keys() + colanns.keys():
+    #    dcs.append(omero.cmd.Delete('/Annotation', aid))
+    #doall = omero.cmd.DoAll()
+    #doall.requests = dcs
+    #h = client.sf.submit(doall)
+    #try:
+    #    conn._waitOnCmd(h)
+    #    for r in h.getResponse().responses:
+    #        print 'Scheduled: %d Actual: %d' % (
+    #            r.scheduledDeletes, r.actualDeletes)
+    #except omero.CmdError as e:
+    #    print h.getResponse()
+
+    for obj in rowanns + colanns + [omero.model.OriginalFileI(tableid)]:
+        print 'Deleting: %s %s' % (obj.ice_id(), obj.getId().val)
+        conn.deleteObjectDirect(obj)
+
 
 def init_store():
     store = features.OmeroTablesFeatureStore.FeatureTableStore(
-        client.getSession(), namespace='test-20140618')
+        client.getSession(), namespace='test-20140618', cachesize=40)
     return store
