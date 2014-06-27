@@ -26,6 +26,7 @@ At present only strings are supported for keys and values
 """
 
 import itertools
+import time
 
 import omero
 import omero.gateway
@@ -48,9 +49,10 @@ class TypeException(MetadataException):
 
 class MapAnnotations(object):
 
-    def __init__(self, session, namespace=None):
+    def __init__(self, session, namespace=None, querypagesize=10000):
         self.session = session
         self.namespace = namespace
+        self.querypagesize = querypagesize
         if namespace is not None and not isinstance(namespace, str):
             raise TypeException('namespace must be a string')
 
@@ -100,8 +102,7 @@ class MapAnnotations(object):
             # Each [id, key, value] is returned separately, use order by to
             # ensure all keys/values for an annotation are consecutive
             q += ' order by ann.id'
-            print q
-            anns = qs.projection(q, params)
+            anns = self.paged_query(qs.projection, q, params)
 
             # iikvs: A map of ids:((id, key, value), ...)
             results = dict(
@@ -109,9 +110,28 @@ class MapAnnotations(object):
                                         for ikv in iikvs[1]))
                 for iikvs in itertools.groupby(anns, lambda x: x[0]))
         else:
-            print q
-            results = qs.findAllByQuery(q, params)
+            results = self.paged_query(qs.findAllByQuery, q, params)
 
+        return results
+
+    def paged_query(self, queryfun, q, params):
+        results = []
+        offset = 0
+        print 'Query: %s' % q
+        starttm = time.time()
+        while True:
+            params.page(offset, self.querypagesize)
+            print '  Page offset: %d+%d' % (offset, self.querypagesize)
+            r = queryfun(q, params)
+            if not r:
+                break
+            results.extend(r)
+            if len(r) < self.querypagesize:
+                break
+            offset += self.querypagesize
+
+        endtm = time.time()
+        print '  Time taken: %d ms' % (endtm - starttm)
         return results
 
     @staticmethod
