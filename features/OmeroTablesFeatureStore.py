@@ -31,7 +31,7 @@ from omero.rtypes import unwrap
 import itertools
 
 
-DEFAULT_NAMESPACE = 'omero.features'
+DEFAULT_NAMESPACE = 'omero.features/0.1'
 DEFAULT_COLUMN_SUBSPACE = '/featureset'
 DEFAULT_ROW_SUBSPACE = '/sample'
 
