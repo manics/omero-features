@@ -65,9 +65,9 @@ class TestMapAnnotations(object):
     def parameters_equal(a, b):
         return a.map == b.map and (
             (a.theFilter is None and b.theFilter is None) or
-                (a.theFilter.__dict__ == b.theFilter.__dict__)) and (
+            (a.theFilter.__dict__ == b.theFilter.__dict__)) and (
             (a.theOptions is None and b.theOptions is None) or
-                (a.theOptions.__dict__ == b.theOptions.__dict__))
+            (a.theOptions.__dict__ == b.theOptions.__dict__))
 
     @pytest.mark.parametrize('ns', [None, 'namespace'])
     @pytest.mark.parametrize('kw', [True, False])

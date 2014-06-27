@@ -315,7 +315,7 @@ class TestFeatureTableStore(object):
         fts.create_feature_set(self.fsmeta, col_desc)
         store = fts.get_feature_set(self.fsmeta)
 
-        expected_cols = [omero.grid.LongArrayColumn('x', '', 1),]
+        expected_cols = [omero.grid.LongArrayColumn('x', '', 1)]
         TableStoreHelper.assert_coltypes_equal(store.cols, expected_cols)
 
         with pytest.raises(OmeroTablesFeatureStore.TooManyTablesException):
