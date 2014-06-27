@@ -61,6 +61,14 @@ class TestMapAnnotations(object):
     def teardown_method(self, method):
         self.mox.UnsetStubs()
 
+    @staticmethod
+    def parameters_equal(a, b):
+        return a.map == b.map and (
+            (a.theFilter is None and b.theFilter is None) or
+                (a.theFilter.__dict__ == b.theFilter.__dict__)) and (
+            (a.theOptions is None and b.theOptions is None) or
+                (a.theOptions.__dict__ == b.theOptions.__dict__))
+
     @pytest.mark.parametrize('ns', [None, 'namespace'])
     @pytest.mark.parametrize('kw', [True, False])
     def test_create_map_ann(self, ns, kw):
@@ -93,8 +101,8 @@ class TestMapAnnotations(object):
     @pytest.mark.parametrize('kwp', ['default', 'kw', 'project'])
     def test_query_by_map_ann(self, ns, kwp):
         sess = MockSession()
-        self.mox.StubOutWithMock(sess.qs, 'findAllByQuery')
-        self.mox.StubOutWithMock(sess.qs, 'projection')
+        ma = OmeroMetadata.MapAnnotations(sess, namespace=ns)
+        self.mox.StubOutWithMock(ma, 'paged_query')
 
         query = 'from MapAnnotation ann join fetch ann.mapValue map where '
 
@@ -154,15 +162,15 @@ class TestMapAnnotations(object):
             ]
 
         if kwp != 'project':
-            sess.qs.findAllByQuery(query, mox.Func(
-                lambda o: params.map == o.map)).AndReturn([r1, r2])
+            ma.paged_query(sess.qs.findAllByQuery, query, mox.Func(
+                lambda o: self.parameters_equal(params, o))
+                ).AndReturn([r1, r2])
         else:
-            sess.qs.projection(query, mox.Func(
-                lambda o: params.map == o.map)).AndReturn(ps)
+            ma.paged_query(sess.qs.projection, query, mox.Func(
+                lambda o: self.parameters_equal(params, o))).AndReturn(ps)
 
         self.mox.ReplayAll()
 
-        ma = OmeroMetadata.MapAnnotations(sess, namespace=ns)
         if kwp == 'kw':
             assert ma.query_by_map_annkw(a='1', bb=['cc', 'dd']) == [r1, r2]
         elif kwp == 'default':
@@ -174,6 +182,45 @@ class TestMapAnnotations(object):
                     10: {'a': '1', 'bb': 'cc'},
                     20: {'a': '1', 'bb': 'dd'}
                 }
+        self.mox.VerifyAll()
+
+    @pytest.mark.parametrize('fullpage', [True, False])
+    def test_paged_query(self, fullpage):
+        def expected_params(offset, limit):
+            p = omero.sys.ParametersI(wrap({'a': '1'}).val)
+            p.theFilter = omero.sys.Filter()
+            p.theFilter.offset = wrap(offset)
+            p.theFilter.limit = wrap(limit)
+            return p
+
+        params = omero.sys.ParametersI(wrap({'a': '1'}).val)
+
+        sess = MockSession()
+        # Any function handle will do
+        self.mox.StubOutWithMock(sess.qs, 'findAllByQuery')
+
+        query = 'query'
+
+        sess.qs.findAllByQuery(query, mox.Func(
+            lambda o: self.parameters_equal(expected_params(0, 2), o))
+            ).AndReturn(['1', '2'])
+
+        if fullpage:
+            sess.qs.findAllByQuery(query, mox.Func(
+                lambda o: self.parameters_equal(expected_params(2, 2), o))
+                ).AndReturn(None)
+            expectedret = ['1', '2']
+        else:
+            sess.qs.findAllByQuery(query, mox.Func(
+                lambda o: self.parameters_equal(expected_params(2, 2), o))
+                ).AndReturn(['3'])
+            expectedret = ['1', '2', '3']
+
+        self.mox.ReplayAll()
+
+        ma = OmeroMetadata.MapAnnotations(sess, querypagesize=2)
+        assert ma.paged_query(
+            sess.qs.findAllByQuery, query, params) == expectedret
         self.mox.VerifyAll()
 
     def test_type_to_str(self):
