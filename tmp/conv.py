@@ -3,6 +3,7 @@
 
 
 import datetime
+import glob
 import itertools
 import numpy as np
 import os
@@ -12,8 +13,9 @@ import features
 import features.OmeroTablesFeatureStore
 
 
-combinefs = False
+combinefs = True
 
+files = glob.glob('/Users/simon/machine_learning/standalone-pychrm-ns-p23153/SmallFeatureSet/*/*npz')
 
 def loadnp(f, create=False):
     d = np.load(f)
@@ -36,7 +38,11 @@ def loadnp(f, create=False):
     sample['datetime-calculated'] = timestamp
 
     fss = split_into_featuresets(names, values)
-    store_featuresets(fss, version, sample, timestamp, create)
+    if combinefs:
+        store_featuresets_combined(
+            fss, version, sample, timestamp, 'SmallFeatureSet', create)
+    else:
+        store_featuresets(fss, version, sample, timestamp, create)
 
 
 def parse_feature_name(name):
@@ -72,6 +78,29 @@ def split_into_featuresets(names, values):
     return featuresets
 
 
+def store_featuresets_combined(
+        featuresets, version, sample, timestamp, fsname, create=False):
+    names = sorted(featuresets.keys())
+    values = tuple(featuresets[name] for name in names)
+    colmetas = zip(names, [len(v) for v in values])
+
+    fsmeta = {
+        'name': fsname,
+        'version': version,
+    }
+    rowmeta = sample
+
+    print
+    print 'Feature dict: %s' % fsmeta
+    print 'Sample dict: %s ' % sample
+    print 'Feature values: %s' % str(values)
+
+    if create:
+        col_desc = [(float, n, v) for n, v in colmetas]
+        store.create_feature_set(fsmeta, col_desc)
+    store.store(fsmeta, [rowmeta], [(values)])
+
+
 def store_featuresets(featuresets, version, sample, timestamp, create=False):
     for name, values in featuresets.iteritems():
         fsmeta = {
@@ -85,13 +114,10 @@ def store_featuresets(featuresets, version, sample, timestamp, create=False):
         print 'Sample dict: %s ' % sample
         print 'Feature values: %s' % str(values)
 
-        if not combinefs:
-            if create:
-                col_desc = [(float, name, len(values))]
-                store.create_feature_set(fsmeta, col_desc)
-            store.store(fsmeta, [rowmeta], [(values,)])
-
-    #store.store(fsmeta, sample, [values])
+        if create:
+            col_desc = [(float, name, len(values))]
+            store.create_feature_set(fsmeta, col_desc)
+        store.store(fsmeta, [rowmeta], [(values,)])
 
 
 def list_samples(q=None, projection=True):
@@ -151,5 +177,5 @@ def delete_feature_table(tableid):
 
 def init_store():
     store = features.OmeroTablesFeatureStore.FeatureTableStore(
-        client.getSession(), namespace='test-20140618', cachesize=40)
+        client.getSession(), namespace='test-20140627', cachesize=40)
     return store
