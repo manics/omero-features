@@ -367,8 +367,8 @@ class TestFeatureTableStore(object):
 
     def test_init(self):
         fts = OmeroTablesFeatureStore.FeatureTableStore(None)
-        assert fts.column_space == 'omero.features/featureset'
-        assert fts.row_space == 'omero.features/sample'
+        assert fts.column_space == 'omero.features/0.1/featureset'
+        assert fts.row_space == 'omero.features/0.1/sample'
 
         fts = OmeroTablesFeatureStore.FeatureTableStore(None, namespace='x')
         assert fts.column_space == 'x/featureset'
@@ -389,7 +389,7 @@ class TestFeatureTableStore(object):
         fts = OmeroTablesFeatureStore.FeatureTableStore(None)
 
         OmeroTablesFeatureStore.FeatureSetTableStore(
-            None, 'omero.features/featureset', 'omero.features/sample',
+            None, 'omero.features/0.1/featureset', 'omero.features/0.1/sample',
             fsmeta, col_desc).AndReturn(fs)
 
         self.mox.ReplayAll()
@@ -415,8 +415,8 @@ class TestFeatureTableStore(object):
         else:
             fts.fss.get(fskey).AndReturn(None)
             OmeroTablesFeatureStore.FeatureSetTableStore(
-                None, 'omero.features/featureset', 'omero.features/sample',
-                fsmeta).AndReturn(fs)
+                None, 'omero.features/0.1/featureset',
+                'omero.features/0.1/sample', fsmeta).AndReturn(fs)
             fts.fss.insert(fskey, fs)
         self.mox.ReplayAll()
 
