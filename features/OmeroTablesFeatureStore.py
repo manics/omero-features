@@ -93,6 +93,7 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
         self.fsmeta = fsmeta
         self.table = None
         self.header = None
+        self.chunk_size = None
         self.get_table(create)
 
     def close(self):
@@ -194,14 +195,42 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
         # anns is a dict of annotation-id:map-value, drop the id
         mas = anns.values()
         offs = [long(a['_offset']) for a in mas]
-        data = self.table.readCoordinates(offs)
-        values = [c.values for c in data.columns]
+        values = self.chunked_table_read(offs, self.get_chunk_size())
+
         # Convert into row-wise storage
-        print values
         if len(values) > 1:
             return mas, zip(*values)
         else:
             return mas, [tuple([v]) for v in values[0]]
+
+    def get_chunk_size(self):
+        """
+        Ice has a maximum message size. Use a very rough heuristic to decide
+        how many table rows to read in one go
+
+        Assume only doubles are stored (8 bytes), and keep the table chunk size
+        to <16MB
+        """
+        if not self.chunk_size:
+            rowsize = sum(c.size for c in self.cols)
+            self.chunk_size = max(16777216 / (rowsize * 8), 1)
+
+        return self.chunk_size
+
+    def chunked_table_read(self, offsets, chunk_size):
+        values = None
+
+        print 'Chunk size: %d' % chunk_size
+        for n in xrange(0, len(offsets), chunk_size):
+            print '  Chunk offset: %d+%d' % (n, chunk_size)
+            data = self.table.readCoordinates(offsets[n:(n + chunk_size)])
+            if values is None:
+                values = [c.values for c in data.columns]
+            else:
+                for c, v in itertools.izip(data.columns, values):
+                    v.extend(c.values)
+
+        return values
 
     @staticmethod
     def desc_to_str(d):
