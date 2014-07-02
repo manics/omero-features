@@ -102,6 +102,7 @@ class MockOriginalFile:
 
 class MockColumn:
     values = None
+    size = None
 
     def __eq__(self, o):
         return self.values == o.values
@@ -146,6 +147,7 @@ class MockFeatureSetTableStore(OmeroTablesFeatureStore.FeatureSetTableStore):
         self.cols = None
         self.table = None
         self.header = None
+        self.chunk_size = None
 
 
 class TestFeatureSetTableStore(object):
@@ -319,13 +321,13 @@ class TestFeatureSetTableStore(object):
         d = dict(rowquery.items() + [('_tableid', '1')])
         store.rma.query_by_map_ann(d, projection=True).AndReturn(mas)
 
-        self.mox.StubOutWithMock(table, 'readCoordinates')
-        data = MockTableData()
-        data.columns = []
+        self.mox.StubOutWithMock(store, 'get_chunk_size')
+        self.mox.StubOutWithMock(store, 'chunked_table_read')
+
+        data = []
         for n in xrange(ncols):
-            c = MockColumn()
-            c.values = [[10 + n], [20 + n]]
-            data.columns.append(c)
+            cvals = [[10 + n], [20 + n]]
+            data.append(cvals)
 
         # Need to figure out the order of the dict keys
         ks = mas.keys()
@@ -336,7 +338,8 @@ class TestFeatureSetTableStore(object):
             expected_offsets = [6, 1]
             expected_ras = [mas['5'], mas['4']]
 
-        table.readCoordinates(expected_offsets).AndReturn(data)
+        store.get_chunk_size().AndReturn(2)
+        store.chunked_table_read(expected_offsets, 2).AndReturn(data)
 
         self.mox.ReplayAll()
 
@@ -346,6 +349,42 @@ class TestFeatureSetTableStore(object):
             assert rv == [([10],), ([20],)]
         else:
             assert rv == [([10], [11]), ([20], [21])]
+        self.mox.VerifyAll()
+
+    def test_get_chunk_size(self):
+        table = self.mox.CreateMock(MockTable)
+        store = MockFeatureSetTableStore(None, None, None)
+        store.table = table
+        store.cols = [MockColumn() for n in xrange(100)]
+        for col in store.cols:
+            col.size = 2
+
+        assert store.get_chunk_size() == 10485
+
+    def test_chunked_table_read(self):
+        table = self.mox.CreateMock(MockTable)
+        store = MockFeatureSetTableStore(None, None, None)
+        store.table = table
+
+        self.mox.StubOutWithMock(table, 'readCoordinates')
+
+        offsets = [2, 7, 5]
+
+        data1 = MockTableData()
+        data1.columns = [MockColumn()]
+        data1.columns[0].values = [[1], [2]]
+
+        data2 = MockTableData()
+        data2.columns = [MockColumn()]
+        data2.columns[0].values = [[3]]
+
+        table.readCoordinates([2, 7]).AndReturn(data1)
+        table.readCoordinates([5]).AndReturn(data2)
+
+        self.mox.ReplayAll()
+
+        d = store.chunked_table_read(offsets, 2)
+        assert d == [[[1], [2], [3]]]
         self.mox.VerifyAll()
 
     def test_desc_to_str(self):
