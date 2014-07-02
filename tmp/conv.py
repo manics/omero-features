@@ -15,8 +15,16 @@ import features.OmeroTablesFeatureStore
 
 combinefs = True
 dryrun = True
+namespace = 'test-20140702'
 
 files = glob.glob('/Users/simon/machine_learning/standalone-pychrm-ns-p23153/SmallFeatureSet/*/*npz')
+files = sorted(files)
+
+# Example run:
+#store = init_store()
+#loadnp(files[0], True)
+#time a = [loadnp(f) for f in files[1:]]
+
 
 def loadnp(f, create=False):
     d = np.load(f)
@@ -187,5 +195,5 @@ def delete_feature_table(tableid):
 
 def init_store():
     store = features.OmeroTablesFeatureStore.FeatureTableStore(
-        client.getSession(), namespace='test-20140627', cachesize=40)
+        client.getSession(), namespace=namespace, cachesize=40)
     return store
