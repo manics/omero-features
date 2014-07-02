@@ -14,6 +14,7 @@ import features.OmeroTablesFeatureStore
 
 
 combinefs = True
+dryrun = True
 
 files = glob.glob('/Users/simon/machine_learning/standalone-pychrm-ns-p23153/SmallFeatureSet/*/*npz')
 
@@ -29,9 +30,12 @@ def loadnp(f, create=False):
     if len(values) != 1059:
         raise Exception('Expected 1059 feature names, found: %d' % len(values))
 
-    fre = re.match(
+    fre = re.search(
+        '-p(?P<projectid>[\d+]+)/'
+        '(?P<fsname>[^/]+)/[^/]+/'
         'image(?P<imageid>\d+)-c(?P<c>\d+)-z(?P<z>\d+)-t(?P<t>\d+).npz$',
-        os.path.basename(f)).groupdict()
+        f).groupdict()
+    fsname = fre.pop('fsname')
     sample = dict((k, int(v)) for k, v in fre.iteritems())
     timestamp = datetime.datetime.utcfromtimestamp(
         os.stat(f).st_mtime).isoformat()
@@ -40,7 +44,7 @@ def loadnp(f, create=False):
     fss = split_into_featuresets(names, values)
     if combinefs:
         store_featuresets_combined(
-            fss, version, sample, timestamp, 'SmallFeatureSet', create)
+            fss, version, sample, timestamp, fsname, create)
     else:
         store_featuresets(fss, version, sample, timestamp, create)
 
@@ -93,7 +97,10 @@ def store_featuresets_combined(
     print
     print 'Feature dict: %s' % fsmeta
     print 'Sample dict: %s ' % sample
-    print 'Feature values: %s' % str(values)
+    print 'Feature values: %s...' % str(values)[:100]
+
+    if dryrun:
+        return
 
     if create:
         col_desc = [(float, n, v) for n, v in colmetas]
@@ -112,7 +119,10 @@ def store_featuresets(featuresets, version, sample, timestamp, create=False):
         print
         print 'Feature dict: %s' % fsmeta
         print 'Sample dict: %s ' % sample
-        print 'Feature values: %s' % str(values)
+        print 'Feature values: %s...' % str(values)[:100]
+
+        if dryrun:
+            continue
 
         if create:
             col_desc = [(float, name, len(values))]
