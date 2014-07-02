@@ -131,7 +131,7 @@ class MapAnnotations(object):
             offset += self.querypagesize
 
         endtm = time.time()
-        print '  Time taken: %d ms' % (endtm - starttm)
+        print '  Time taken: %d ms' % ((endtm - starttm) * 1000)
         return results
 
     @staticmethod
