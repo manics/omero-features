@@ -64,7 +64,7 @@ class MapAnnotations(object):
         m = self.session.getUpdateService().saveAndReturnObject(m)
         return unwrap(m.id)
 
-    def query_by_map_ann(self, kvs, projection=False):
+    def query_by_map_ann(self, kvs, projection=None):
         params = omero.sys.ParametersI()
 
         qs = self.session.getQueryService()
@@ -92,6 +92,14 @@ class MapAnnotations(object):
         if projection:
             q = ('select ann.id, index(map), map from MapAnnotation ann '
                  'join ann.mapValue map')
+
+            try:
+                iter(projection)
+                conditions.append('index(map) in (:fields)')
+                params.add('fields', wrap(projection))
+            except TypeError:
+                pass
+
         else:
             q = 'from MapAnnotation ann join fetch ann.mapValue map'
 
