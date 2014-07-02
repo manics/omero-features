@@ -98,18 +98,16 @@ class TestMapAnnotations(object):
         self.mox.VerifyAll()
 
     @pytest.mark.parametrize('ns', [None, 'namespace'])
-    @pytest.mark.parametrize('kwp', ['default', 'kw', 'project'])
+    @pytest.mark.parametrize('kwp', ['default', 'kw', 'project', 'fields'])
     def test_query_by_map_ann(self, ns, kwp):
         sess = MockSession()
         ma = OmeroMetadata.MapAnnotations(sess, namespace=ns)
         self.mox.StubOutWithMock(ma, 'paged_query')
 
-        query = 'from MapAnnotation ann join fetch ann.mapValue map where '
-
-        if kwp != 'project':
+        if kwp in ['default', 'kw']:
+            query = 'from MapAnnotation ann join fetch ann.mapValue map where '
             if ns is not None:
-                query = (
-                    'from MapAnnotation ann join fetch ann.mapValue map where '
+                query += (
                     'ann.ns = :ns '
                     'and ann.mapValue[:k1] = :v1 '
                     'and ann.mapValue[:k2] in (:v2)')
@@ -117,32 +115,35 @@ class TestMapAnnotations(object):
                     'ns': ns,
                     'k1': 'a', 'v1': '1', 'k2': 'bb', 'v2': ['cc', 'dd']}
             else:
-                query = (
-                    'from MapAnnotation ann join fetch ann.mapValue map where '
+                query += (
                     'ann.mapValue[:k0] = :v0 and ann.mapValue[:k1] in (:v1)')
                 params = {
                     'k0': 'a', 'v0': '1', 'k1': 'bb', 'v1': ['cc', 'dd']}
         else:
+            query = (
+                'select ann.id, index(map), map from MapAnnotation ann '
+                'join ann.mapValue map where ')
             if ns is not None:
-                query = (
-                    'select ann.id, index(map), map from MapAnnotation ann '
-                    'join ann.mapValue map where '
+                query += (
                     'ann.ns = :ns '
                     'and ann.mapValue[:k1] = :v1 '
-                    'and ann.mapValue[:k2] in (:v2) '
-                    'order by ann.id')
+                    'and ann.mapValue[:k2] in (:v2) ')
                 params = {
                     'ns': ns,
                     'k1': 'a', 'v1': '1', 'k2': 'bb', 'v2': ['cc', 'dd']}
             else:
-                query = (
-                    'select ann.id, index(map), map from MapAnnotation ann '
-                    'join ann.mapValue map where '
+                query += (
                     'ann.mapValue[:k0] = :v0 '
-                    'and ann.mapValue[:k1] in (:v1) '
-                    'order by ann.id')
+                    'and ann.mapValue[:k1] in (:v1) ')
                 params = {
                     'k0': 'a', 'v0': '1', 'k1': 'bb', 'v1': ['cc', 'dd']}
+            if kwp == 'fields':
+                query += (
+                    'and index(map) in (:fields) '
+                )
+                fields = ('a', 'bb')
+                params['fields'] = fields
+            query += 'order by ann.id'
 
         params = omero.sys.ParametersI(wrap(params).val)
 
@@ -161,7 +162,7 @@ class TestMapAnnotations(object):
             [rlong(20), rstring('bb'), rstring('dd')],
             ]
 
-        if kwp != 'project':
+        if kwp in ['default', 'kw']:
             ma.paged_query(sess.qs.findAllByQuery, query, mox.Func(
                 lambda o: self.parameters_equal(params, o))
                 ).AndReturn([r1, r2])
@@ -176,9 +177,15 @@ class TestMapAnnotations(object):
         elif kwp == 'default':
             assert ma.query_by_map_ann(
                 {'a': '1', 'bb': ['cc', 'dd']}) == [r1, r2]
-        else:
+        elif kwp == 'project':
             assert ma.query_by_map_ann(
                 {'a': '1', 'bb': ['cc', 'dd']}, True) == {
+                    10: {'a': '1', 'bb': 'cc'},
+                    20: {'a': '1', 'bb': 'dd'}
+                }
+        elif kwp == 'fields':
+            assert ma.query_by_map_ann(
+                {'a': '1', 'bb': ['cc', 'dd']}, fields) == {
                     10: {'a': '1', 'bb': 'cc'},
                     20: {'a': '1', 'bb': 'dd'}
                 }

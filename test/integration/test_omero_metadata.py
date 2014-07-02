@@ -46,6 +46,11 @@ class TestMapAnnotations(object):
     def teardown_method(self, method):
         self.cli.closeSession()
 
+    @staticmethod
+    def assert_equal_any_order(a, b):
+        assert ((a[0] == b[0] and a[1] == b[1]) or
+                (a[0] == b[1] and a[1] == b[0]))
+
     def test_create_map_ann(self):
         ns = UserAccount.uuid()
         ma = OmeroMetadata.MapAnnotations(self.sess, namespace=ns)
@@ -61,13 +66,15 @@ class TestMapAnnotations(object):
         assert unwrap(mr.getNs()) == ns
         assert unwrap(mr.getMapValue()) == d
 
-    @pytest.mark.parametrize('projection', [True, False])
+    @pytest.mark.parametrize('projection', [True, False, ('bb',)])
     def test_query_by_map_ann(self, projection):
         ns = UserAccount.uuid()
         ma = OmeroMetadata.MapAnnotations(self.sess, namespace=ns)
 
         d1 = {'a': '1', 'bb': 'cc'}
+        d1f = {'bb': 'cc'}
         d2 = {'a': '1', 'bb': 'd'}
+        d2f = {'bb': 'd'}
 
         m1 = omero.model.MapAnnotationI()
         m1.setNs(wrap(ns))
@@ -82,7 +89,10 @@ class TestMapAnnotations(object):
         rs = ma.query_by_map_ann(d1, projection)
         assert len(rs) == 1
         if projection:
-            assert rs.values()[0] == d1
+            if projection is True:
+                assert rs.values()[0] == d1
+            else:
+                assert rs.values()[0] == d1f
         else:
             assert unwrap(rs[0].getNs()) == ns
             assert unwrap(rs[0].getMapValue()) == d1
@@ -91,9 +101,13 @@ class TestMapAnnotations(object):
         assert len(rs) == 2
         if projection:
             rmv1, rmv2 = rs.values()
+            if projection is True:
+                self.assert_equal_any_order((rmv1, rmv2), (d1, d2))
+            else:
+                self.assert_equal_any_order((rmv1, rmv2), (d1f, d2f))
         else:
             assert unwrap(rs[0].getNs()) == ns
             assert unwrap(rs[1].getNs()) == ns
             rmv1 = unwrap(rs[0].getMapValue())
             rmv2 = unwrap(rs[1].getMapValue())
-        assert (rmv1 == d1 and rmv2 == d2) or (rmv1 == d2 and rmv2 == d1)
+            self.assert_equal_any_order((rmv1, rmv2), (d1, d2))
