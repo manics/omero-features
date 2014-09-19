@@ -23,7 +23,7 @@
 Use OMERO MapAnnotations for metadata, store only the features in HDF5 tables
 """
 
-from AbstractAPI import AbstractFeatureSetStorage, AbstractFeatureStorage
+from AbstractAPI import AbstractFeatureStorageManager, FeatureRow
 import OmeroMetadata
 import omero
 from omero.rtypes import unwrap
@@ -32,8 +32,8 @@ import itertools
 
 
 DEFAULT_NAMESPACE = 'omero.features/0.1'
-DEFAULT_COLUMN_SUBSPACE = '/featureset'
-DEFAULT_ROW_SUBSPACE = '/sample'
+DEFAULT_FEATURE_SUBSPACE = 'features'
+DEFAULT_ANNOTATION_SUBSPACE = 'source'
 
 
 class TableStoreException(Exception):
@@ -80,66 +80,61 @@ class TableUsageException(TableStoreException):
     pass
 
 
-class FeatureSetTableStore(AbstractFeatureSetStorage):
+class FeatureTable(object):
     """
-    A single feature set.
-    Each element is a fixed width array of doubles
+    A feature store.
+    Each row is an array of fixed width DoubleArrays
     """
 
-    def __init__(self, session, column_space, row_space, fsmeta, create=None):
+    def __init__(self, session, name, ft_space, ann_space, coldesc=None):
         self.session = session
-        self.cma = OmeroMetadata.MapAnnotations(session, column_space)
-        self.rma = OmeroMetadata.MapAnnotations(session, row_space)
-        self.fsmeta = fsmeta
+        self.name = name
+        self.ft_space = ft_space
+        self.ann_space = ann_space
         self.table = None
         self.header = None
         self.chunk_size = None
-        self.get_table(create)
+        self.get_table(coldesc)
 
     def close(self):
         if self.table:
             self.table.close()
             self.table = None
 
-    def get_table(self, create=None):
+    def get_table(self, coldesc=None):
         if self.table:
             if create:
                 raise TableUsageException(
                     'New table requested but already open: ns:%s %s' % (
-                        self.cma.namespace, str(self.fsmeta)))
+                        self.ft_space, self.name)
             assert self.cols
             return self.table
-        a = self.cma.query_by_map_ann(
-            dict(self.fsmeta.items()), projection=True)
-        if create:
-            if len(a) != 0:
+
+        f = conn.getObjects('OriginalFile', attributes={
+            'name': self.name, 'path': self.ft_space})
+        if coldesc:
+            if len(f) != 0:
                 raise TooManyTablesException(
-                    'Annotation already exists for new table: ns:%s %s' % (
-                        self.cma.namespace, str(self.fsmeta)))
-            self.new_table(create)
+                    'File path:%s name:%s already exists' % (
+                        self.ft_space, self.name))
+            self.new_table(coldesc)
         else:
-            if len(a) < 1:
+            if len(f) < 1:
                 raise NoTableMatchException(
-                    'No annotations found for: ns:%s %s' % (
-                        self.cma.namespace, str(self.fsmeta)))
-            if len(a) > 1:
+                    'No files found for path:%s name:%s') % (
+                        self.ft_space, self.name))
+            if len(f) > 1:
                 raise TooManyTablesException(
-                    'Multiple annotations found for: ns:%s %s' % (
-                        self.cma.namespace, str(self.fsmeta)))
-            tid = long(a.values()[0]['_tableid'])
+                    'Multiple files found for path:%s name:%s') % (
+                        self.ft_space, self.name))
+            tid = f.id
             self.open_table(tid)
         return self.table
 
-    def new_table(self, column_desc):
-        meta = dict(self.fsmeta.items())
-        if '_tableid' in meta:
-            raise InvalidAnnotationException(
-                'Reserved key already present in fsmeta: %s', '_tableid')
-
-        name = self.desc_to_str(self.fsmeta)
-        self.table = self.session.sharedResources().newTable(0, name)
+    def new_table(self, coldesc):
+        self.table = self.session.sharedResources().newTable(0, self.name)
         if not self.table:
-            raise OmeroTableException('Failed to create table: %s' % name)
+            raise OmeroTableException('Failed to create table: %s' % self.name)
         tid = unwrap(self.table.getOriginalFile().getId())
 
         typemap = {
@@ -149,10 +144,12 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
             str: omero.grid.StringColumn,
             }
 
-        coldef = []
-        for d in column_desc:
-            type, name, size = d
-            coldef.append(typemap[type](name, '', size))
+        coldef = [
+            omero.grid.ImageColumn('ImageID', ''),
+            omero.grid.RoiColumn('RoiID', '')
+        ]
+        for d in coldesc:
+            coldef.append(omero.grid.DoubleArrayColumn(d[0], '', d[1]))
 
         self.table.initialize(coldef)
         self.cols = self.table.getHeaders()
@@ -160,8 +157,9 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
             raise OmeroTableException(
                 'Failed to get columns for table ID:%d' % tid)
 
-        meta['_tableid'] = str(tid)
-        self.cma.create_map_ann(meta)
+        f = self.table.getOriginalFile()
+        f.setPath(wrap(self.ft_space))
+        f = self.session.getUpdateService().saveAndReturnObject(f)
 
     def open_table(self, tid):
         self.table = self.session.sharedResources().openTable(
@@ -173,35 +171,49 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
             raise OmeroTableException(
                 'Failed to get columns for table ID:%d' % tid)
 
-    def store1(self, rowmeta, values):
-        # TODO Check for existing annotation
-        # TODO Check only one row in values
-        off = self.table.getNumberOfRows()
-        for n in xrange(len(self.cols)):
-            self.cols[n].values = [values[n]]
+    def store1(self, image_id=0, roi_id=0, values):
+        self.cols[0].values = [image_id]
+        self.cols[1].values = [roi_id]
+        for n in xrange(2:len(self.cols)):
+            self.cols[n].values = [values[n - 2]]
         self.table.addData(self.cols)
-        tid = unwrap(self.get_table().getOriginalFile().getId())
-        self.rma.create_map_ann(dict(
-            [('_tableid', str(tid)), ('_offset', str(off))] + rowmeta.items()))
+        self.create_annotation(image_id, roi_id)
 
-    def store(self, rowmetas, values):
-        for (rowmeta, value) in itertools.izip(rowmetas, values):
-            self.store1(rowmeta, value)
+    #def store(self, rowmetas, values):
+    #    for (rowmeta, value) in itertools.izip(rowmetas, values):
+    #        self.store1(rowmeta, value)
 
-    def fetch(self, rowquery):
-        tid = unwrap(self.get_table().getOriginalFile().getId())
-        anns = self.rma.query_by_map_ann(dict(
-            rowquery.items() + [('_tableid', str(tid))]), projection=True)
-        # anns is a dict of annotation-id:map-value, drop the id
-        mas = anns.values()
-        offs = [long(a['_offset']) for a in mas]
+    def fetch_by_image(self, image_id):
+        nrows, values = self._fetch_by_image_or_roi(self, image_id):
+        assert nrows == 1
+        return self.feature_row(values)
+
+    def fetch_by_roi(self, roi_id):
+        nrows, values = self._fetch_by_image_or_roi(self, roi_id):
+        assert nrows == 1
+        return self.feature_row(values)
+
+    def fetch_by_image_or_roi(self, image_id=0, roi_id=0):
+        cond = []
+        if image_id:
+            cond.append('(ImageID==%d)' % image_id)
+        if roi_id:
+            cond.append('(RoiID==%d)' % roi_id)
+        cond = '|'.join(cond)
+        offs = self.table.getWhereList(
+            cond, {}, 0, self.table.getNumberOfRows(), 0)
         values = self.chunked_table_read(offs, self.get_chunk_size())
 
         # Convert into row-wise storage
-        if len(values) > 1:
-            return mas, zip(*values)
+        nrows = len(values)
+        if nrows > 1:
+            return nrows, zip(*values)
         else:
-            return mas, [tuple([v]) for v in values[0]]
+            return nrows, [tuple([v]) for v in values[0]]
+
+    def feature_row(self, values):
+        return FeatureRow(
+            names=[h.name for h in self.headers[2:]], values=values[2:])
 
     def get_chunk_size(self):
         """
@@ -232,13 +244,31 @@ class FeatureSetTableStore(AbstractFeatureSetStorage):
 
         return values
 
-    @staticmethod
-    def desc_to_str(d):
-        def esc(s):
-            return s.replace('\\', '\\\\').replace('_', '\\_').replace(
-                '=', '\\=')
-        s = '_'.join('%s=%s' % (esc(k), esc(d[k])) for k in sorted(d.keys()))
-        return s
+    def create_annotation(self, image_id=0, roi_id=0):
+        objs = []
+        links = []
+        if imageid:
+            obj = conn.getObject('Image', image_id)
+            assert obj
+            objs.append(obj)
+            links.append(omero.model.ImageAnnotationLink())
+        if roiid:
+            obj = conn.getObject('ROI', roi_id)
+            assert obj
+            objs.append(obj)
+            links.append(omero.model.RoiAnnotationLink())
+
+        for (obj, link) in zip(objs, links):
+            ann = omero.model.FileAnnotationI()
+            ann.setNs(wrap(self.ft_space))
+            ann.setFile(self.get_table().getOriginalFile())
+            link.setParent(obj)
+            link.setChild(ann)
+            ann = self.session.getUpdateService().saveAndReturnObject(ann)
+
+
+
+
 
 
 class LRUCache(object):
@@ -313,7 +343,7 @@ class FeatureTableStore(AbstractFeatureStorage):
         self.cachesize = kwargs.get('cachesize', 10)
         self.fss = LRUTableCache(kwargs.get('cachesize', 10))
 
-    def create_feature_set(self, fsmeta, col_desc):
+    def create(self, featureset_name, names, widths):
         fskey = tuple(sorted(fsmeta.iteritems()))
         r = FeatureSetTableStore(
             self.session, self.column_space, self.row_space, fsmeta, col_desc)
