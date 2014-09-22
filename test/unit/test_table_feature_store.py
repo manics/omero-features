@@ -26,7 +26,6 @@ import itertools
 import omero
 from omero.rtypes import unwrap, wrap
 
-from features import AbstractAPI
 from features import OmeroTablesFeatureStore
 
 
@@ -245,7 +244,7 @@ class TestFeatureTable(object):
         table = self.mox.CreateMock(MockTable)
 
         col_desc = [('x', 1)]
-        filedesc = { 'name': 'table-name', 'path': store.ft_space}
+        filedesc = {'name': 'table-name', 'path': store.ft_space}
 
         if opened:
             store.table = table
@@ -515,7 +514,7 @@ class TestFeatureTable(object):
         store = MockFeatureTable(session)
         self.mox.StubOutWithMock(session.qs, 'findAllByQuery')
 
-        kvs = { 'x': 'aaa', 'y': ['bbb', 'ccc'] }
+        kvs = {'x': 'aaa', 'y': ['bbb', 'ccc']}
         # Need to figure out which order the keys will be read
         if kvs.keys() == ['x', 'y']:
             q = "FROM ObjectType WHERE x = :x AND y in (:y)"

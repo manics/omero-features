@@ -220,7 +220,7 @@ class FeatureTable(object):
         self.cols = self.table.getHeaders()
         if not self.cols:
             raise OmeroTableException(
-                'Failed to get columns for table ID:%d' % tid)
+                'Failed to get columns for table ID:%d' % unwrap(tof.getId()))
 
         tof.setPath(wrap(self.ft_space))
         tof = self.session.getUpdateService().saveAndReturnObject(tof)
@@ -249,7 +249,7 @@ class FeatureTable(object):
             self.cols[1].values = [object_id]
             self.cols[0].values = [0]
         else:
-            raise OmeroTableUsageException(
+            raise TableUsageException(
                 'Invalid object type: %s' % object_type)
 
         for n in xrange(2, len(self.cols)):
@@ -265,22 +265,24 @@ class FeatureTable(object):
 
     def fetch_by_image(self, image_id):
         nrows, values = self.fetch_by_object('Image', image_id)
-        assert nrows == 1
+        if nrows != 1:
+            raise TableUsageException(
+                'Multiple feature rows found for Image %d' % image_id)
         return self.feature_row(values)
 
     def fetch_by_roi(self, roi_id):
         nrows, values = self.fetch_by_object('Roi', roi_id)
-        assert nrows == 1
+        if nrows != 1:
+            raise TableUsageException(
+                'Multiple feature rows found for Roi %d' % roi_id)
         return self.feature_row(values)
 
     def fetch_by_object(self, object_type, object_id):
-        if object_type == 'Image':
-            cond = '(ImageID==%d)' % object_id
-        elif object_type == 'Roi':
-            cond = '(RoiID==%d)' % object_id
+        if object_type in ('Image', 'Roi'):
+            cond = '(%sID==%d)' % (object_type, object_id)
         else:
-            raise OmeroTableUsageException(
-                'Invalid object type: %s' % object_type)
+            raise TableUsageException(
+                'Unsupported object type: %s' % object_type)
         offsets = self.table.getWhereList(
             cond, {}, 0, self.table.getNumberOfRows(), 0)
         values = self.chunked_table_read(offsets, self.get_chunk_size())
@@ -324,8 +326,6 @@ class FeatureTable(object):
                     v.extend(c.values)
 
         return values
-
-
 
     def get_objects(self, object_type, kvs):
         params = omero.sys.ParametersI()
