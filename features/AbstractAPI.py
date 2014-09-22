@@ -35,13 +35,13 @@ class FeatureRow(object):
         assert widths or values
 
         self._widths = widths
-        self._names = None
+        if names and widths:
+            assert len(names) == len(widths)
+        self._names = names
+
         self._values = None
         if values:
             self.values = values
-        if names:
-            assert len(names) == len(self._widths)
-        self._names = names
         self._namemap = {}
 
     def get_index(self, name):
@@ -75,7 +75,7 @@ class FeatureRow(object):
     @values.setter
     def values(self, value):
         if self._names:
-            assert len(self.names) == len(self._values)
+            assert len(self._names) == len(value)
         widths = [len(v) for v in value]
         if self._widths:
             assert self._widths == widths

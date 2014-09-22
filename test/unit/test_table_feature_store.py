@@ -26,7 +26,7 @@ import itertools
 import omero
 from omero.rtypes import unwrap, wrap
 
-from features import OmeroMetadata
+from features import AbstractAPI
 from features import OmeroTablesFeatureStore
 
 
@@ -148,6 +148,48 @@ class MockFeatureSetTableStore(OmeroTablesFeatureStore.FeatureSetTableStore):
         self.table = None
         self.header = None
         self.chunk_size = None
+
+
+class TestFeatureRow(object):
+
+    def test_init(self):
+        # TODO: Use a proper exception
+        with pytest.raises(AssertionError):
+            AbstractAPI.FeatureRow(names=['a'], values=[[1], [2]])
+        with pytest.raises(AssertionError):
+            AbstractAPI.FeatureRow(names=['a'], widths=[1, 1])
+        with pytest.raises(AssertionError):
+            AbstractAPI.FeatureRow(widths=[1], values=[[1, 2]])
+
+        fr = AbstractAPI.FeatureRow(names=['a', 'b'], values=[[1], [2, 3]])
+        assert fr.names == ['a', 'b']
+        assert fr.widths == [1, 2]
+        assert fr.values == [[1], [2, 3]]
+
+        fr = AbstractAPI.FeatureRow(names=['a', 'b'], widths=[1, 2])
+        assert fr.names == ['a', 'b']
+        assert fr.widths == [1, 2]
+        assert fr.values == None
+
+    def test_values(self):
+        fr = AbstractAPI.FeatureRow(names=['a', 'b'], widths=[1, 2])
+
+        fr.values = [[1], [2, 3]]
+        assert fr.values == [[1], [2, 3]]
+
+        with pytest.raises(AssertionError):
+            fr.values = [[0], [0]]
+
+        assert fr.get_index('a') == 0
+        assert fr.get_index('b') == 1
+        assert fr['a'] == [1]
+        assert fr['b'] == [2, 3]
+
+        fr['a'] = [10]
+        assert fr.values == [[10], [2, 3]]
+
+        with pytest.raises(AssertionError):
+            fr['b'] = [0]
 
 
 class TestFeatureSetTableStore(object):
