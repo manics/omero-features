@@ -173,30 +173,33 @@ class TestFeatureRow(object):
 
     def test_init(self):
         # TODO: Use a proper exception
-        with pytest.raises(AssertionError):
-            AbstractAPI.FeatureRow(names=['a'], values=[[1], [2]])
-        with pytest.raises(AssertionError):
-            AbstractAPI.FeatureRow(names=['a'], widths=[1, 1])
-        with pytest.raises(AssertionError):
-            AbstractAPI.FeatureRow(widths=[1], values=[[1, 2]])
+        with pytest.raises(OmeroTablesFeatureStore.FeatureRowException):
+            OmeroTablesFeatureStore.FeatureRow(names=['a'], values=[[1], [2]])
+        with pytest.raises(OmeroTablesFeatureStore.FeatureRowException):
+            OmeroTablesFeatureStore.FeatureRow(names=['a'], widths=[1, 1])
+        with pytest.raises(OmeroTablesFeatureStore.FeatureRowException):
+            OmeroTablesFeatureStore.FeatureRow(widths=[1], values=[[1, 2]])
 
-        fr = AbstractAPI.FeatureRow(names=['a', 'b'], values=[[1], [2, 3]])
+        fr = OmeroTablesFeatureStore.FeatureRow(
+            names=['a', 'b'], values=[[1], [2, 3]])
         assert fr.names == ['a', 'b']
         assert fr.widths == [1, 2]
         assert fr.values == [[1], [2, 3]]
 
-        fr = AbstractAPI.FeatureRow(names=['a', 'b'], widths=[1, 2])
+        fr = OmeroTablesFeatureStore.FeatureRow(
+            names=['a', 'b'], widths=[1, 2])
         assert fr.names == ['a', 'b']
         assert fr.widths == [1, 2]
-        assert fr.values == None
+        assert fr.values is None
 
     def test_values(self):
-        fr = AbstractAPI.FeatureRow(names=['a', 'b'], widths=[1, 2])
+        fr = OmeroTablesFeatureStore.FeatureRow(
+            names=['a', 'b'], widths=[1, 2])
 
         fr.values = [[1], [2, 3]]
         assert fr.values == [[1], [2, 3]]
 
-        with pytest.raises(AssertionError):
+        with pytest.raises(OmeroTablesFeatureStore.FeatureRowException):
             fr.values = [[0], [0]]
 
         assert fr.get_index('a') == 0
@@ -207,7 +210,7 @@ class TestFeatureRow(object):
         fr['a'] = [10]
         assert fr.values == [[10], [2, 3]]
 
-        with pytest.raises(AssertionError):
+        with pytest.raises(OmeroTablesFeatureStore.FeatureRowException):
             fr['b'] = [0]
 
 

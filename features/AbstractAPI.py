@@ -24,41 +24,24 @@ OMERO.features abstract API
 """
 
 
-class FeatureRow(object):
+class AbstractFeatureRow(object):
     """
     A featureset row
 
     Each row consists of a list of arrays of doubles
     """
+    pass
 
     def __init__(self, widths=None, names=None, values=None):
-        assert widths or values
-
         self._widths = widths
-        if names and widths:
-            assert len(names) == len(widths)
         self._names = names
-
-        self._values = None
-        if values:
-            self.values = values
-        self._namemap = {}
-
-    def get_index(self, name):
-        try:
-            return self._namemap[name]
-        except KeyError:
-            self._namemap = dict(
-                ni for ni in zip(self._names, xrange(len(self._names))))
-            return self._namemap[name]
+        self._values = values
 
     def __getitem__(self, key):
-        return self.values[self.get_index(key)]
+        raise Exception('Not implemented')
 
     def __setitem__(self, key, value):
-        i = self.get_index(key)
-        assert len(value) == self._widths[i]
-        self.values[i] = value
+        raise Exception('Not implemented')
 
     @property
     def names(self):
@@ -71,28 +54,6 @@ class FeatureRow(object):
     @property
     def values(self):
         return self._values
-
-    @values.setter
-    def values(self, value):
-        if self._names:
-            assert len(self._names) == len(value)
-        widths = [len(v) for v in value]
-        if self._widths:
-            assert self._widths == widths
-        else:
-            self._widths = widths
-        self._values = value
-
-    @values.deleter
-    def values(self):
-        del self._values
-
-    def __repr__(self):
-        return '%s(widths=%r, names=%r, values=%r)' % (
-            self.__class__.__name__, self._widths, self._names, self._values)
-
-
-
 
 
 class AbstractFeatureStorageManager(object):

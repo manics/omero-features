@@ -23,8 +23,7 @@
 Implementation of the OMERO.features AbstractAPI
 """
 
-from AbstractAPI import AbstractFeatureStorageManager, FeatureRow
-import OmeroMetadata
+import AbstractAPI
 import omero
 from omero.rtypes import unwrap, wrap
 
@@ -65,19 +64,92 @@ class TooManyTablesException(TableStoreException):
     pass
 
 
-class InvalidAnnotationException(TableStoreException):
-    """
-    Errors in the keys or values of an annotation used for linking features
-    and samples
-    """
-    pass
-
-
 class TableUsageException(TableStoreException):
     """
     Invalid usage of this implementation of the Features API
     """
     pass
+
+
+class FeatureRowException(TableStoreException):
+    """
+    Errors in a FeatureRow object
+    """
+    pass
+
+
+class FeatureRow(AbstractAPI.AbstractFeatureRow):
+
+    def __init__(self, widths=None, names=None, values=None):
+        if not widths and not values:
+            raise FeatureRowException(
+                'At least one of widths or values must be provided')
+
+        self._widths = widths
+        if names and widths and len(names) != len(widths):
+            raise FeatureRowException(
+                'names and widths must have the same number of elements')
+        self._names = names
+
+        self._values = None
+        if values:
+            self.values = values
+        self._namemap = {}
+
+    def get_index(self, name):
+        try:
+            return self._namemap[name]
+        except KeyError:
+            self._namemap = dict(
+                ni for ni in zip(self._names, xrange(len(self._names))))
+            return self._namemap[name]
+
+    def __getitem__(self, key):
+        return self.values[self.get_index(key)]
+
+    def __setitem__(self, key, value):
+        i = self.get_index(key)
+        if len(value) != self._widths[i]:
+            raise FeatureRowException(
+                'Expected array of length %d, received %d' % (
+                    len(value), self._widths[i]))
+        self.values[i] = value
+
+    @property
+    def names(self):
+        return self._names
+
+    @property
+    def widths(self):
+        return self._widths
+
+    @property
+    def values(self):
+        return self._values
+
+    @values.setter
+    def values(self, value):
+        if self._names and len(self._names) != len(value):
+            raise FeatureRowException(
+                'Expected %d elements, received %d' % (
+                    len(self._names), len(value)))
+        widths = [len(v) for v in value]
+        if self._widths:
+            if self._widths != widths:
+                raise FeatureRowException(
+                    'Expected elements with widths %s, received %s' % (
+                        self._widths, widths))
+        else:
+            self._widths = widths
+        self._values = value
+
+    @values.deleter
+    def values(self):
+        del self._values
+
+    def __repr__(self):
+        return '%s(widths=%r, names=%r, values=%r)' % (
+            self.__class__.__name__, self._widths, self._names, self._values)
 
 
 class FeatureTable(object):
