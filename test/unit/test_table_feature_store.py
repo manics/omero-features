@@ -59,14 +59,6 @@ class TestLRUCache(object):
         assert len(c) == 2
 
 
-class MockMapAnnotation:
-    def __init__(self, map):
-        self.map = dict((k, wrap(v)) for k, v in map.iteritems())
-
-    def getMapValue(self):
-        return self.map
-
-
 class MockSharedResources:
     def __init__(self, tid, table, tname):
         self.tid = tid
@@ -79,14 +71,31 @@ class MockSharedResources:
         return self.table
 
     def openTable(self, o):
-        assert isinstance(o, omero.model.OriginalFileI)
         assert unwrap(o.id) == self.tid
         return self.table
 
 
+class MockUpdateService:
+    def saveAndReturnObject(self, o):
+        pass
+
+
+class MockQueryService:
+    def findAllByQuery(self, q, p):
+        pass
+
+
 class MockSession:
     def __init__(self, tid, table, tname):
+        self.us = MockUpdateService()
+        self.qs = MockQueryService()
         self.msr = MockSharedResources(tid, table, tname)
+
+    def getUpdateService(self):
+        return self.us
+
+    def getQueryService(self):
+        return self.qs
 
     def sharedResources(self):
         return self.msr
@@ -95,17 +104,24 @@ class MockSession:
 class MockOriginalFile:
     def __init__(self, id):
         self.id = wrap(id)
+        self.path = None
 
     def getId(self):
         return self.id
 
+    def setPath(self, path):
+        self.path = path
+
 
 class MockColumn:
-    values = None
-    size = None
+    def __init__(self, name=None, values=None, size=None):
+        self.name = name
+        self.values = values
+        self.size = size
 
     def __eq__(self, o):
-        return self.values == o.values
+        return (self.name == o.name and self.values == o.values and
+                self.size == o.size)
 
 
 class MockTableData:
@@ -122,7 +138,7 @@ class MockTable:
     def close(self):
         pass
 
-    def initialize(self, desc):
+    def getHeaders(self):
         pass
 
     def getNumberOfRows(self):
@@ -131,19 +147,22 @@ class MockTable:
     def getOriginalFile(self):
         pass
 
+    def getWhereList(self):
+        pass
+
+    def initialize(self, desc):
+        pass
+
     def readCoordinates(self):
         pass
 
-    def getHeaders(self):
-        pass
 
-
-class MockFeatureSetTableStore(OmeroTablesFeatureStore.FeatureSetTableStore):
-    def __init__(self, session, namespace, fsmeta):
+class MockFeatureTable(OmeroTablesFeatureStore.FeatureTable):
+    def __init__(self, session):
         self.session = session
-        self.cma = OmeroMetadata.MapAnnotations(session, namespace)
-        self.rma = OmeroMetadata.MapAnnotations(session, namespace)
-        self.fsmeta = {'fsname': 'a'}
+        self.name = 'table-name'
+        self.ft_space = '/test/features/ft_space'
+        self.ann_space = '/test/features/ann_space'
         self.cols = None
         self.table = None
         self.header = None
@@ -192,7 +211,7 @@ class TestFeatureRow(object):
             fr['b'] = [0]
 
 
-class TestFeatureSetTableStore(object):
+class TestFeatureTable(object):
 
     def setup_method(self, method):
         self.mox = mox.Mox()
@@ -203,37 +222,38 @@ class TestFeatureSetTableStore(object):
     def test_close(self):
         table = self.mox.CreateMock(MockTable)
         table.close()
-        store = MockFeatureSetTableStore(None, None, None)
+        store = MockFeatureTable(None)
         store.table = table
 
         self.mox.ReplayAll()
 
         store.close()
+        assert store.table is None
         self.mox.VerifyAll()
 
     @pytest.mark.parametrize('opened', [True, False])
     @pytest.mark.parametrize('create', [True, False])
     def test_get_table(self, opened, create):
-        ma = {3: {'fsname': 'a', '_tableid': '1'}}
-        store = MockFeatureSetTableStore(None, None, None)
-        self.mox.StubOutWithMock(store.cma, 'query_by_map_ann')
+        mf = MockOriginalFile(1)
+        store = MockFeatureTable(None)
+        self.mox.StubOutWithMock(store, 'get_objects')
         self.mox.StubOutWithMock(store, 'open_table')
         self.mox.StubOutWithMock(store, 'new_table')
         table = self.mox.CreateMock(MockTable)
-        col_desc = [(int, 'x', 1)]
+
+        col_desc = [('x', 1)]
+        filedesc = { 'name': 'table-name', 'path': store.ft_space}
 
         if opened:
             store.table = table
             store.cols = object()
         else:
             if create:
-                store.cma.query_by_map_ann(
-                    {'fsname': 'a'}, projection=True).AndReturn({})
+                store.get_objects('OriginalFile', filedesc).AndReturn(None)
                 store.new_table(col_desc)
             else:
-                store.cma.query_by_map_ann(
-                    {'fsname': 'a'}, projection=True).AndReturn(ma)
-                store.open_table(1)
+                store.get_objects('OriginalFile', filedesc).AndReturn([mf])
+                store.open_table(mf)
 
         self.mox.ReplayAll()
 
@@ -256,7 +276,7 @@ class TestFeatureSetTableStore(object):
                 type(x) == type(y),
                 x.name == y.name,
                 x.description == y.description,
-                x.size == y.size,
+                getattr(x, 'size', None) == getattr(y, 'size', None),
                 x.values == y.values
             ])
 
@@ -265,27 +285,24 @@ class TestFeatureSetTableStore(object):
 
         table = self.mox.CreateMock(MockTable)
         session = MockSession(1, table, 'table-name')
-        store = MockFeatureSetTableStore(session, None, None)
-        self.mox.StubOutWithMock(store.cma, 'create_map_ann')
+        store = MockFeatureTable(session)
 
-        table.getOriginalFile().AndReturn(MockOriginalFile(1))
+        mf = MockOriginalFile(1)
+        self.mox.StubOutWithMock(mf, 'setPath')
+
+        table.getOriginalFile().AndReturn(mf)
+        mf.setPath(wrap(store.ft_space))
 
         tcols = [
-            omero.grid.LongArrayColumn('Integers', '', 1),
-            omero.grid.LongArrayColumn('Longs', '', 2),
-            omero.grid.DoubleArrayColumn('Floats', '', 3),
-            omero.grid.StringColumn('String', '', 4),
+            omero.grid.ImageColumn('ImageID', ''),
+            omero.grid.RoiColumn('RoiID', ''),
+            omero.grid.DoubleArrayColumn('x', '', 1),
         ]
         table.initialize(mox.Func(lambda xs: comparecols(xs, tcols)))
         table.getHeaders().AndReturn(tcols)
 
-        store.cma.create_map_ann({'fsname': 'a', '_tableid': '1'})
-
         desc = [
-            (int, 'Integers', 1),
-            (long, 'Longs', 2),
-            (float, 'Floats', 3),
-            (str, 'String', 4),
+            ('x', 1),
         ]
 
         self.mox.ReplayAll()
@@ -296,116 +313,169 @@ class TestFeatureSetTableStore(object):
         self.mox.VerifyAll()
 
     def test_open_table(self):
+        mf = MockOriginalFile(1)
         table = self.mox.CreateMock(MockTable)
         session = MockSession(1, table, None)
-        store = MockFeatureSetTableStore(session, None, None)
+        store = MockFeatureTable(session)
         cols = [object]
 
         table.getHeaders().AndReturn(cols)
         self.mox.ReplayAll()
 
-        store.open_table(1)
+        store.open_table(mf)
         assert store.table == table
         assert store.cols == cols
         self.mox.VerifyAll()
 
-    def test_store1(self):
+    def test_store_by_image(self):
+        store = MockFeatureTable(None)
+        self.mox.StubOutWithMock(store, 'store_by_object')
+        values = [[34]]
+        store.store_by_object('Image', 12, values)
+
+        self.mox.ReplayAll()
+        store.store_by_image(12, values)
+        self.mox.VerifyAll()
+
+    def test_store_by_roi(self):
+        store = MockFeatureTable(None)
+        self.mox.StubOutWithMock(store, 'store_by_object')
+        values = [[34]]
+        store.store_by_object('Roi', 12, values)
+
+        self.mox.ReplayAll()
+        store.store_by_roi(12, values)
+        self.mox.VerifyAll()
+
+    def test_store_by_object(self):
         table = self.mox.CreateMock(MockTable)
-        store = MockFeatureSetTableStore(None, None, None)
-        self.mox.StubOutWithMock(store.rma, 'create_map_ann')
-
+        store = MockFeatureTable(None)
         store.table = table
-        cols = [MockColumn]
-        cols[0].values = [[2]]
-        store.cols = [MockColumn]
+        store.cols = [MockColumn('a'), MockColumn('b'),
+                      MockColumn('c', None, 1), MockColumn('d', None, 2)]
 
-        table.getNumberOfRows().AndReturn(1)
+        self.mox.StubOutWithMock(table, 'addData')
+        self.mox.StubOutWithMock(table, 'getOriginalFile')
+        self.mox.StubOutWithMock(store, 'create_file_annotation')
+
+        mf = MockOriginalFile(3)
+        values = [[10], [20, 30]]
+        cols = [MockColumn('a', [12]), MockColumn('b', [0]),
+                MockColumn('c', [[10]], 1), MockColumn('d', [[20, 30]], 2)]
+
         table.addData(cols)
-        table.getOriginalFile().AndReturn(MockOriginalFile(3))
-
-        d = {'_tableid': '3', '_offset': '1', 'objectid': '4'}
-        store.rma.create_map_ann(d)
-        rowmeta = {'objectid': '4'}
+        table.getOriginalFile().AndReturn(mf)
+        store.create_file_annotation('Image', 12, store.ann_space, mf)
         self.mox.ReplayAll()
 
-        store.store1(rowmeta, [[2]])
+        store.store_by_object('Image', 12, values)
         self.mox.VerifyAll()
 
     def test_store(self):
-        store = MockFeatureSetTableStore(None, None, None)
-        self.mox.StubOutWithMock(store, 'store1')
-        rowmetas = [{'objectid': '4'}, {'objectid': '5'}]
-        values = [[[1]], [[2]]]
+        store = MockFeatureTable(None)
+        self.mox.StubOutWithMock(store, 'store_by_object')
+        ids = [1, 2]
+        valuess = [[[34]], [[56]]]
+        store.store_by_object('Image', 1, [[34]])
+        store.store_by_object('Image', 2, [[56]])
 
-        store.store1(rowmetas[0], values[0])
-        store.store1(rowmetas[1], values[1])
         self.mox.ReplayAll()
+        store.store('Image', ids, valuess)
+        self.mox.VerifyAll()
 
-        store.store(rowmetas, values)
+    def test_fetch_by_image(self):
+        store = MockFeatureTable(None)
+        self.mox.StubOutWithMock(store, 'fetch_by_object')
+        self.mox.StubOutWithMock(store, 'feature_row')
+        values = [1, 0, [5]]
+        r = object()
+
+        store.fetch_by_object('Image', 1).AndReturn((1, values))
+        store.feature_row(values).AndReturn(r)
+
+        self.mox.ReplayAll()
+        store.fetch_by_image(1)
+        self.mox.VerifyAll()
+
+    def test_fetch_by_roi(self):
+        store = MockFeatureTable(None)
+        self.mox.StubOutWithMock(store, 'fetch_by_object')
+        self.mox.StubOutWithMock(store, 'feature_row')
+        values = [1, 0, [5]]
+        r = object()
+
+        store.fetch_by_object('Roi', 1).AndReturn((1, values))
+        store.feature_row(values).AndReturn(r)
+
+        self.mox.ReplayAll()
+        store.fetch_by_roi(1)
         self.mox.VerifyAll()
 
     @pytest.mark.parametrize('ncols', [1, 2])
-    def test_fetch(self, ncols):
-        mas = {
-            '4': {'name': 'a', '_tableid': '1', '_offset': '1'},
-            '5': {'name': 'a', '_tableid': '1', '_offset': '6'}
-            }
+    def test_fetch_by_object(self, ncols):
         table = self.mox.CreateMock(MockTable)
-        store = MockFeatureSetTableStore(None, None, None)
+        store = MockFeatureTable(None)
         store.table = table
         store.cols = [MockColumn() for n in xrange(ncols)]
 
-        self.mox.StubOutWithMock(table, 'getOriginalFile')
-        table.getOriginalFile().AndReturn(MockOriginalFile(1))
-        self.mox.StubOutWithMock(store.rma, 'query_by_map_ann')
+        offsets = [3, 7]
 
-        rowquery = {'name': 'a'}
-        d = dict(rowquery.items() + [('_tableid', '1')])
-        store.rma.query_by_map_ann(d, projection=True).AndReturn(mas)
-
+        self.mox.StubOutWithMock(table, 'getWhereList')
+        self.mox.StubOutWithMock(table, 'getNumberOfRows')
         self.mox.StubOutWithMock(store, 'get_chunk_size')
         self.mox.StubOutWithMock(store, 'chunked_table_read')
+
+        table.getNumberOfRows().AndReturn(123)
+        table.getWhereList('(ImageID==99)', {}, 0, 123, 0).AndReturn(offsets)
 
         data = []
         for n in xrange(ncols):
             cvals = [[10 + n], [20 + n]]
             data.append(cvals)
 
-        # Need to figure out the order of the dict keys
-        ks = mas.keys()
-        if ks[0] == '4':
-            expected_offsets = [1, 6]
-            expected_ras = [mas['4'], mas['5']]
-        else:
-            expected_offsets = [6, 1]
-            expected_ras = [mas['5'], mas['4']]
-
         store.get_chunk_size().AndReturn(2)
-        store.chunked_table_read(expected_offsets, 2).AndReturn(data)
+        store.chunked_table_read(offsets, 2).AndReturn(data)
 
         self.mox.ReplayAll()
 
-        ra, rv = store.fetch(rowquery)
-        assert ra == expected_ras
+        rnrows, rvalues = store.fetch_by_object('Image', 99)
+
+        assert rnrows == len(offsets)
         if ncols == 1:
-            assert rv == [([10],), ([20],)]
+            assert rvalues == [([10],), ([20],)]
         else:
-            assert rv == [([10], [11]), ([20], [21])]
+            assert rvalues == [([10], [11]), ([20], [21])]
+        self.mox.VerifyAll()
+
+    def test_feature_row(self):
+        store = MockFeatureTable(None)
+        store.header = [MockColumn('ignore'), MockColumn('ignore'),
+                        MockColumn('a'), MockColumn('b')]
+
+        row = [0, 0, [1], [2, 3]]
+
+        self.mox.ReplayAll()
+        rv = store.feature_row(row)
+        assert rv.names == ['a', 'b']
+        assert rv.widths == [1, 2]
+        assert rv.values == row[2:]
         self.mox.VerifyAll()
 
     def test_get_chunk_size(self):
         table = self.mox.CreateMock(MockTable)
-        store = MockFeatureSetTableStore(None, None, None)
+        store = MockFeatureTable(None)
         store.table = table
         store.cols = [MockColumn() for n in xrange(100)]
         for col in store.cols:
             col.size = 2
 
+        self.mox.ReplayAll()
         assert store.get_chunk_size() == 10485
+        self.mox.VerifyAll()
 
     def test_chunked_table_read(self):
         table = self.mox.CreateMock(MockTable)
-        store = MockFeatureSetTableStore(None, None, None)
+        store = MockFeatureTable(None)
         store.table = table
 
         self.mox.StubOutWithMock(table, 'readCoordinates')
@@ -429,10 +499,57 @@ class TestFeatureSetTableStore(object):
         assert d == [[[1], [2], [3]]]
         self.mox.VerifyAll()
 
-    def test_desc_to_str(self):
-        d = {'a': 'b=c', 'd=e': 'f', r'g_\h': r'\=i'}
-        s = OmeroTablesFeatureStore.FeatureSetTableStore.desc_to_str(d)
-        assert s == r'a=b\=c_d\=e=f_g\_\\h=\\\=i'
+    def test_get_objects(self):
+        def parameters_equal(a, b):
+            print a, b
+            return a.map == b.map and (
+                (a.theFilter is None and b.theFilter is None) or
+                (a.theFilter.__dict__ == b.theFilter.__dict__)) and (
+                (a.theOptions is None and b.theOptions is None) or
+                (a.theOptions.__dict__ == b.theOptions.__dict__))
+
+        session = MockSession(None, None, None)
+        store = MockFeatureTable(session)
+        self.mox.StubOutWithMock(session.qs, 'findAllByQuery')
+
+        kvs = { 'x': 'aaa', 'y': ['bbb', 'ccc'] }
+        # Need to figure out which order the keys will be read
+        if kvs.keys() == ['x', 'y']:
+            q = "FROM ObjectType WHERE x = :x AND y in (:y)"
+        else:
+            q = "FROM ObjectType WHERE y in (:y) AND x = :x"
+
+        params = omero.sys.ParametersI(wrap(kvs).val)
+        m = object()
+
+        session.qs.findAllByQuery(q, mox.Func(
+            lambda o: parameters_equal(params, o))).AndReturn([m])
+
+        self.mox.ReplayAll()
+
+        assert store.get_objects('ObjectType', kvs) == [m]
+        self.mox.VerifyAll()
+
+    def test_create_file_annotation(self):
+        session = MockSession(None, None, None)
+        store = MockFeatureTable(session)
+        self.mox.StubOutWithMock(store, 'get_objects')
+        self.mox.StubOutWithMock(session.us, 'saveAndReturnObject')
+
+        ofile = omero.model.OriginalFileI(2)
+        image = omero.model.ImageI(2)
+        store.get_objects('Image', 3).AndReturn(image)
+        mocklink = object()
+
+        session.us.saveAndReturnObject(mox.Func(
+            lambda o: o.getParent() == image and
+            o.getChild().getNs() == wrap('ns') and
+            o.getChild().getFile() == ofile)).AndReturn(mocklink)
+        self.mox.ReplayAll()
+
+        assert store.create_file_annotation(
+            'Image', 3, 'ns', ofile) == mocklink
+        self.mox.VerifyAll()
 
 
 class TestFeatureTableStore(object):
