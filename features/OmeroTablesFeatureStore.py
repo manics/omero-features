@@ -20,13 +20,13 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 """
-Use OMERO MapAnnotations for metadata, store only the features in HDF5 tables
+Implementation of the OMERO.features AbstractAPI
 """
 
 from AbstractAPI import AbstractFeatureStorageManager, FeatureRow
 import OmeroMetadata
 import omero
-from omero.rtypes import unwrap
+from omero.rtypes import unwrap, wrap
 
 import itertools
 
@@ -91,6 +91,7 @@ class FeatureTable(object):
         self.name = name
         self.ft_space = ft_space
         self.ann_space = ann_space
+        self.cols = None
         self.table = None
         self.header = None
         self.chunk_size = None
@@ -103,53 +104,45 @@ class FeatureTable(object):
 
     def get_table(self, coldesc=None):
         if self.table:
-            if create:
+            if coldesc:
                 raise TableUsageException(
                     'New table requested but already open: ns:%s %s' % (
-                        self.ft_space, self.name)
+                        self.ft_space, self.name))
             assert self.cols
             return self.table
 
-        f = conn.getObjects('OriginalFile', attributes={
-            'name': self.name, 'path': self.ft_space})
+        tablefile = self.get_objects(
+            'OriginalFile', {'name': self.name, 'path': self.ft_space})
         if coldesc:
-            if len(f) != 0:
+            if tablefile:
                 raise TooManyTablesException(
                     'File path:%s name:%s already exists' % (
                         self.ft_space, self.name))
             self.new_table(coldesc)
         else:
-            if len(f) < 1:
+            if len(tablefile) < 1:
                 raise NoTableMatchException(
-                    'No files found for path:%s name:%s') % (
+                    'No files found for path:%s name:%s' % (
                         self.ft_space, self.name))
-            if len(f) > 1:
+            if len(tablefile) > 1:
                 raise TooManyTablesException(
-                    'Multiple files found for path:%s name:%s') % (
+                    'Multiple files found for path:%s name:%s' % (
                         self.ft_space, self.name))
-            tid = f.id
-            self.open_table(tid)
+            self.open_table(tablefile[0])
         return self.table
 
     def new_table(self, coldesc):
         self.table = self.session.sharedResources().newTable(0, self.name)
         if not self.table:
             raise OmeroTableException('Failed to create table: %s' % self.name)
-        tid = unwrap(self.table.getOriginalFile().getId())
-
-        typemap = {
-            int: omero.grid.LongArrayColumn,
-            long: omero.grid.LongArrayColumn,
-            float: omero.grid.DoubleArrayColumn,
-            str: omero.grid.StringColumn,
-            }
+        tof = self.table.getOriginalFile()
 
         coldef = [
             omero.grid.ImageColumn('ImageID', ''),
             omero.grid.RoiColumn('RoiID', '')
         ]
-        for d in coldesc:
-            coldef.append(omero.grid.DoubleArrayColumn(d[0], '', d[1]))
+        for name, width in coldesc:
+            coldef.append(omero.grid.DoubleArrayColumn(name, '', width))
 
         self.table.initialize(coldef)
         self.cols = self.table.getHeaders()
@@ -157,13 +150,12 @@ class FeatureTable(object):
             raise OmeroTableException(
                 'Failed to get columns for table ID:%d' % tid)
 
-        f = self.table.getOriginalFile()
-        f.setPath(wrap(self.ft_space))
-        f = self.session.getUpdateService().saveAndReturnObject(f)
+        tof.setPath(wrap(self.ft_space))
+        tof = self.session.getUpdateService().saveAndReturnObject(tof)
 
-    def open_table(self, tid):
-        self.table = self.session.sharedResources().openTable(
-            omero.model.OriginalFileI(tid))
+    def open_table(self, tablefile):
+        tid = unwrap(tablefile.getId())
+        self.table = self.session.sharedResources().openTable(tablefile)
         if not self.table:
             raise OmeroTableException('Failed to open table ID:%d' % tid)
         self.cols = self.table.getHeaders()
@@ -171,41 +163,58 @@ class FeatureTable(object):
             raise OmeroTableException(
                 'Failed to get columns for table ID:%d' % tid)
 
-    def store1(self, image_id=0, roi_id=0, values):
-        self.cols[0].values = [image_id]
-        self.cols[1].values = [roi_id]
-        for n in xrange(2:len(self.cols)):
+    def store_by_image(self, image_id, values):
+        self.store_by_object('Image', image_id, values)
+
+    def store_by_roi(self, roi_id, values):
+        self.store_by_object('Roi', roi_id, values)
+
+    def store_by_object(self, object_type, object_id, values):
+        if object_type == 'Image':
+            self.cols[0].values = [object_id]
+            self.cols[1].values = [0]
+        elif object_type == 'Roi':
+            self.cols[1].values = [object_id]
+            self.cols[0].values = [0]
+        else:
+            raise OmeroTableUsageException(
+                'Invalid object type: %s' % object_type)
+
+        for n in xrange(2, len(self.cols)):
             self.cols[n].values = [values[n - 2]]
         self.table.addData(self.cols)
-        self.create_annotation(image_id, roi_id)
+        self.create_file_annotation(
+            object_type, object_id, self.ann_space,
+            self.table.getOriginalFile())
 
-    #def store(self, rowmetas, values):
-    #    for (rowmeta, value) in itertools.izip(rowmetas, values):
-    #        self.store1(rowmeta, value)
+    def store(self, object_type, object_ids, valuess):
+        for (object_id, values) in itertools.izip(object_ids, valuess):
+            self.store_by_object(object_type, object_id, values)
 
     def fetch_by_image(self, image_id):
-        nrows, values = self._fetch_by_image_or_roi(self, image_id):
+        nrows, values = self.fetch_by_object('Image', image_id)
         assert nrows == 1
         return self.feature_row(values)
 
     def fetch_by_roi(self, roi_id):
-        nrows, values = self._fetch_by_image_or_roi(self, roi_id):
+        nrows, values = self.fetch_by_object('Roi', roi_id)
         assert nrows == 1
         return self.feature_row(values)
 
-    def fetch_by_image_or_roi(self, image_id=0, roi_id=0):
-        cond = []
-        if image_id:
-            cond.append('(ImageID==%d)' % image_id)
-        if roi_id:
-            cond.append('(RoiID==%d)' % roi_id)
-        cond = '|'.join(cond)
-        offs = self.table.getWhereList(
+    def fetch_by_object(self, object_type, object_id):
+        if object_type == 'Image':
+            cond = '(ImageID==%d)' % object_id
+        elif object_type == 'Roi':
+            cond = '(RoiID==%d)' % object_id
+        else:
+            raise OmeroTableUsageException(
+                'Invalid object type: %s' % object_type)
+        offsets = self.table.getWhereList(
             cond, {}, 0, self.table.getNumberOfRows(), 0)
-        values = self.chunked_table_read(offs, self.get_chunk_size())
+        values = self.chunked_table_read(offsets, self.get_chunk_size())
 
         # Convert into row-wise storage
-        nrows = len(values)
+        nrows = len(offsets)
         if nrows > 1:
             return nrows, zip(*values)
         else:
@@ -213,7 +222,7 @@ class FeatureTable(object):
 
     def feature_row(self, values):
         return FeatureRow(
-            names=[h.name for h in self.headers[2:]], values=values[2:])
+            names=[h.name for h in self.header[2:]], values=values[2:])
 
     def get_chunk_size(self):
         """
@@ -244,28 +253,41 @@ class FeatureTable(object):
 
         return values
 
-    def create_annotation(self, image_id=0, roi_id=0):
-        objs = []
-        links = []
-        if imageid:
-            obj = conn.getObject('Image', image_id)
-            assert obj
-            objs.append(obj)
-            links.append(omero.model.ImageAnnotationLink())
-        if roiid:
-            obj = conn.getObject('ROI', roi_id)
-            assert obj
-            objs.append(obj)
-            links.append(omero.model.RoiAnnotationLink())
 
-        for (obj, link) in zip(objs, links):
-            ann = omero.model.FileAnnotationI()
-            ann.setNs(wrap(self.ft_space))
-            ann.setFile(self.get_table().getOriginalFile())
-            link.setParent(obj)
-            link.setChild(ann)
-            ann = self.session.getUpdateService().saveAndReturnObject(ann)
 
+    def get_objects(self, object_type, kvs):
+        params = omero.sys.ParametersI()
+
+        qs = self.session.getQueryService()
+        conditions = []
+
+        for k, v in kvs.iteritems():
+            if isinstance(v, list):
+                conditions.append(
+                    '%s in (:%s)' % (k, k))
+            else:
+                conditions.append(
+                    '%s = :%s' % (k, k))
+            params.add(k, wrap(v))
+
+        q = 'FROM %s' % object_type
+        if conditions:
+            q += ' WHERE ' + ' AND '.join(conditions)
+
+        results = qs.findAllByQuery(q, params)
+        return results
+
+    def create_file_annotation(self, object_type, object_id, ns, ofile):
+        obj = self.get_objects(object_type, object_id)
+        assert obj
+        link = getattr(omero.model, '%sAnnotationLinkI' % object_type)()
+        ann = omero.model.FileAnnotationI()
+        ann.setNs(wrap(ns))
+        ann.setFile(ofile)
+        link.setParent(obj)
+        link.setChild(ann)
+        ann = self.session.getUpdateService().saveAndReturnObject(link)
+        return ann
 
 
 
