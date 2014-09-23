@@ -175,11 +175,11 @@ class FeatureTable(object):
             self.table = None
 
     def get_table(self, coldesc=None):
+        tablepath = self.ft_space + '/' + self.name
         if self.table:
             if coldesc:
                 raise TableUsageException(
-                    'New table requested but already open: ns:%s %s' % (
-                        self.ft_space, self.name))
+                    'New table requested but already open: %s' % tablepath)
             assert self.cols
             return self.table
 
@@ -188,26 +188,34 @@ class FeatureTable(object):
         if coldesc:
             if tablefile:
                 raise TooManyTablesException(
-                    'File path:%s name:%s already exists' % (
-                        self.ft_space, self.name))
+                    'Table file already exists: %s' % tablepath)
             self.new_table(coldesc)
         else:
             if len(tablefile) < 1:
                 raise NoTableMatchException(
-                    'No files found for path:%s name:%s' % (
-                        self.ft_space, self.name))
+                    'No files found for: %s' % tablepath)
             if len(tablefile) > 1:
                 raise TooManyTablesException(
-                    'Multiple files found for path:%s name:%s' % (
-                        self.ft_space, self.name))
+                    'Multiple files found for: %s' % tablepath)
             self.open_table(tablefile[0])
         return self.table
 
     def new_table(self, coldesc):
-        self.table = self.session.sharedResources().newTable(0, self.name)
+        tablepath = self.ft_space + '/' + self.name
+        self.table = self.session.sharedResources().newTable(0, tablepath)
         if not self.table:
-            raise OmeroTableException('Failed to create table: %s' % self.name)
+            raise OmeroTableException(
+                'Failed to create table: %s' % tablepath)
+        # Name may not be split into dirname (path) and basename (name)
+        # components https://trac.openmicroscopy.org.uk/ome/ticket/12576
         tof = self.table.getOriginalFile()
+        if (unwrap(tof.getPath()) != self.ft_space or
+                unwrap(tof.getName()) != self.name):
+            print 'Overriding table path and name'
+            tof.setPath(wrap(self.ft_space))
+            tof.setName(wrap(self.name))
+            tof = self.session.getUpdateService().saveAndReturnObject(tof)
+            # Note table.getOriginalFile will still return the old object
 
         coldef = [
             omero.grid.ImageColumn('ImageID', ''),
@@ -221,9 +229,6 @@ class FeatureTable(object):
         if not self.cols:
             raise OmeroTableException(
                 'Failed to get columns for table ID:%d' % unwrap(tof.getId()))
-
-        tof.setPath(wrap(self.ft_space))
-        tof = self.session.getUpdateService().saveAndReturnObject(tof)
 
     def open_table(self, tablefile):
         tid = unwrap(tablefile.getId())
@@ -264,18 +269,18 @@ class FeatureTable(object):
             self.store_by_object(object_type, object_id, values)
 
     def fetch_by_image(self, image_id):
-        nrows, values = self.fetch_by_object('Image', image_id)
-        if nrows != 1:
+        values = self.fetch_by_object('Image', image_id)
+        if len(values) != 1:
             raise TableUsageException(
                 'Multiple feature rows found for Image %d' % image_id)
-        return self.feature_row(values)
+        return self.feature_row(values[0])
 
     def fetch_by_roi(self, roi_id):
-        nrows, values = self.fetch_by_object('Roi', roi_id)
-        if nrows != 1:
+        values = self.fetch_by_object('Roi', roi_id)
+        if len(values) != 1:
             raise TableUsageException(
                 'Multiple feature rows found for Roi %d' % roi_id)
-        return self.feature_row(values)
+        return self.feature_row(values[0])
 
     def fetch_by_object(self, object_type, object_id):
         if object_type in ('Image', 'Roi'):
@@ -288,11 +293,9 @@ class FeatureTable(object):
         values = self.chunked_table_read(offsets, self.get_chunk_size())
 
         # Convert into row-wise storage
-        nrows = len(offsets)
-        if nrows > 1:
-            return nrows, zip(*values)
-        else:
-            return nrows, [tuple([v]) for v in values[0]]
+        for v in values:
+            assert len(offsets) == len(v)
+        return zip(*values)
 
     def feature_row(self, values):
         return FeatureRow(
@@ -307,7 +310,8 @@ class FeatureTable(object):
         to <16MB
         """
         if not self.chunk_size:
-            rowsize = sum(c.size for c in self.cols)
+            # Use size for ArrayColumns, otherwise 1
+            rowsize = sum(getattr(c, 'size', 1) for c in self.cols)
             self.chunk_size = max(16777216 / (rowsize * 8), 1)
 
         return self.chunk_size
@@ -350,13 +354,15 @@ class FeatureTable(object):
         return results
 
     def create_file_annotation(self, object_type, object_id, ns, ofile):
-        obj = self.get_objects(object_type, object_id)
-        assert obj
+        obj = self.get_objects(object_type, {'id': object_id})
+        if len(obj) != 1:
+            raise OmeroTableException(
+                'Failed to get object %s:%d' % (object_type, object_id))
         link = getattr(omero.model, '%sAnnotationLinkI' % object_type)()
         ann = omero.model.FileAnnotationI()
         ann.setNs(wrap(ns))
         ann.setFile(ofile)
-        link.setParent(obj)
+        link.setParent(obj[0])
         link.setChild(ann)
         ann = self.session.getUpdateService().saveAndReturnObject(link)
         return ann
