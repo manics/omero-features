@@ -375,6 +375,36 @@ class FeatureTable(object):
         return ann
 
 
+    def delete(self):
+        # There's a bug (?) which means multiple FileAnnotations with the same
+        # OriginalFile child can't be deleted using the graph spec methods.
+        # For now just delete everything individually
+        qs = self.session.getQueryService()
+        fid = unwrap(self.table.getOriginalFile().getId())
+        params = omero.sys.ParametersI()
+        params.addId(fid)
+        ds = []
+
+        linktypes = [s for s in dir(omero.model) if s.endswith(
+            'AnnotationLink') and not s.startswith('_')]
+        for link in linktypes:
+            r = qs.findAllByQuery(
+                'SELECT ial FROM %s ial WHERE ial.child.file.id=:id' % link,
+                params)
+            ds.extend(r)
+
+        r = qs.findAllByQuery(
+            'SELECT ann FROM FileAnnotation ann WHERE ann.file.id=:id', params)
+        ds.extend(r)
+        ds.append(qs.get('OriginalFile', fid))
+
+        print 'Deleting: %s' % [
+            (d.__class__.__name__, unwrap(d.getId())) for d in ds]
+
+        us = self.session.getUpdateService()
+        self.close()
+        for d in ds:
+            us.deleteObject(d)
 
 
 
