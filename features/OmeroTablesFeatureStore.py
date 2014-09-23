@@ -215,7 +215,14 @@ class FeatureTable(object):
             tof.setPath(wrap(self.ft_space))
             tof.setName(wrap(self.name))
             tof = self.session.getUpdateService().saveAndReturnObject(tof)
-            # Note table.getOriginalFile will still return the old object
+
+            # Note table.getOriginalFile will still return the old object.
+            # Force a reload by re-opening table to avoid sync errors when
+            # storing data.
+            self.table.close()
+            self.table = self.session.sharedResources().openTable(tof)
+            if not self.table:
+                raise OmeroTableException('Failed to reopen table ID:%d' % tid)
 
         coldef = [
             omero.grid.ImageColumn('ImageID', ''),
