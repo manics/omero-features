@@ -59,10 +59,9 @@ class TestLRUCache(object):
 
 
 class MockSharedResources:
-    def __init__(self, tid, table, tname):
+    def __init__(self, tid, table):
         self.tid = tid
         self.table = table
-        self.tname = tname
 
     def newTable(self, repoid, name):
         assert isinstance(repoid, int)
@@ -85,10 +84,10 @@ class MockQueryService:
 
 
 class MockSession:
-    def __init__(self, tid, table, tname):
+    def __init__(self, tid, table):
         self.us = MockUpdateService()
         self.qs = MockQueryService()
-        self.msr = MockSharedResources(tid, table, tname)
+        self.msr = MockSharedResources(tid, table)
 
     def getUpdateService(self):
         return self.us
@@ -101,15 +100,19 @@ class MockSession:
 
 
 class MockOriginalFile:
-    def __init__(self, id):
+    def __init__(self, id, name=None, path=None):
         self.id = wrap(id)
-        self.path = None
+        self.name = name
+        self.path = path
 
     def getId(self):
         return self.id
 
-    def setPath(self, path):
-        self.path = path
+    def getName(self):
+        return self.name
+
+    def getPath(self):
+        return self.path
 
 
 class MockColumn:
@@ -171,7 +174,6 @@ class MockFeatureTable(OmeroTablesFeatureStore.FeatureTable):
 class TestFeatureRow(object):
 
     def test_init(self):
-        # TODO: Use a proper exception
         with pytest.raises(OmeroTablesFeatureStore.FeatureRowException):
             OmeroTablesFeatureStore.FeatureRow(names=['a'], values=[[1], [2]])
         with pytest.raises(OmeroTablesFeatureStore.FeatureRowException):
@@ -286,14 +288,11 @@ class TestFeatureTable(object):
             return all([comparecol(x, y) for x, y in itertools.izip(xs, ys)])
 
         table = self.mox.CreateMock(MockTable)
-        session = MockSession(1, table, 'table-name')
+        session = MockSession(1, table)
         store = MockFeatureTable(session)
 
-        mf = MockOriginalFile(1)
-        self.mox.StubOutWithMock(mf, 'setPath')
-
+        mf = MockOriginalFile(1, 'table-name', store.ft_space)
         table.getOriginalFile().AndReturn(mf)
-        mf.setPath(wrap(store.ft_space))
 
         tcols = [
             omero.grid.ImageColumn('ImageID', ''),
@@ -317,7 +316,7 @@ class TestFeatureTable(object):
     def test_open_table(self):
         mf = MockOriginalFile(1)
         table = self.mox.CreateMock(MockTable)
-        session = MockSession(1, table, None)
+        session = MockSession(1, table)
         store = MockFeatureTable(session)
         cols = [object]
 
@@ -389,10 +388,10 @@ class TestFeatureTable(object):
         store = MockFeatureTable(None)
         self.mox.StubOutWithMock(store, 'fetch_by_object')
         self.mox.StubOutWithMock(store, 'feature_row')
-        values = [1, 0, [5]]
+        values = (1, 0, [5])
         r = object()
 
-        store.fetch_by_object('Image', 1).AndReturn((1, values))
+        store.fetch_by_object('Image', 1).AndReturn([values])
         store.feature_row(values).AndReturn(r)
 
         self.mox.ReplayAll()
@@ -403,10 +402,10 @@ class TestFeatureTable(object):
         store = MockFeatureTable(None)
         self.mox.StubOutWithMock(store, 'fetch_by_object')
         self.mox.StubOutWithMock(store, 'feature_row')
-        values = [1, 0, [5]]
+        values = (1, 0, [5])
         r = object()
 
-        store.fetch_by_object('Roi', 1).AndReturn((1, values))
+        store.fetch_by_object('Roi', 1).AndReturn([values])
         store.feature_row(values).AndReturn(r)
 
         self.mox.ReplayAll()
@@ -414,13 +413,14 @@ class TestFeatureTable(object):
         self.mox.VerifyAll()
 
     @pytest.mark.parametrize('ncols', [1, 2])
-    def test_fetch_by_object(self, ncols):
+    @pytest.mark.parametrize('nrows', [0, 1, 2])
+    def test_fetch_by_object(self, ncols, nrows):
         table = self.mox.CreateMock(MockTable)
         store = MockFeatureTable(None)
         store.table = table
         store.cols = [MockColumn() for n in xrange(ncols)]
 
-        offsets = [3, 7]
+        offsets = [3, 7][:nrows]
 
         self.mox.StubOutWithMock(table, 'getWhereList')
         self.mox.StubOutWithMock(table, 'getNumberOfRows')
@@ -431,8 +431,8 @@ class TestFeatureTable(object):
         table.getWhereList('(ImageID==99)', {}, 0, 123, 0).AndReturn(offsets)
 
         data = []
-        for n in xrange(ncols):
-            cvals = [[10 + n], [20 + n]]
+        for c in xrange(ncols):
+            cvals = [[r * 10 + c] for r in xrange(1, nrows + 1)]
             data.append(cvals)
 
         store.get_chunk_size().AndReturn(2)
@@ -440,13 +440,19 @@ class TestFeatureTable(object):
 
         self.mox.ReplayAll()
 
-        rnrows, rvalues = store.fetch_by_object('Image', 99)
+        rvalues = store.fetch_by_object('Image', 99)
 
-        assert rnrows == len(offsets)
-        if ncols == 1:
+        assert len(rvalues) == len(offsets)
+        if ncols == 1 and nrows == 1:
+            assert rvalues == [([10],)]
+        elif ncols == 1 and nrows == 2:
             assert rvalues == [([10],), ([20],)]
-        else:
+        elif ncols == 2 and nrows == 1:
+            assert rvalues == [([10], [11])]
+        elif ncols == 2 and nrows == 2:
             assert rvalues == [([10], [11]), ([20], [21])]
+        else:
+            assert rvalues == []
         self.mox.VerifyAll()
 
     def test_feature_row(self):
@@ -467,9 +473,7 @@ class TestFeatureTable(object):
         table = self.mox.CreateMock(MockTable)
         store = MockFeatureTable(None)
         store.table = table
-        store.cols = [MockColumn() for n in xrange(100)]
-        for col in store.cols:
-            col.size = 2
+        store.cols = [MockColumn(size=2) for n in xrange(100)]
 
         self.mox.ReplayAll()
         assert store.get_chunk_size() == 10485
@@ -510,7 +514,7 @@ class TestFeatureTable(object):
                 (a.theOptions is None and b.theOptions is None) or
                 (a.theOptions.__dict__ == b.theOptions.__dict__))
 
-        session = MockSession(None, None, None)
+        session = MockSession(None, None)
         store = MockFeatureTable(session)
         self.mox.StubOutWithMock(session.qs, 'findAllByQuery')
 
@@ -533,14 +537,14 @@ class TestFeatureTable(object):
         self.mox.VerifyAll()
 
     def test_create_file_annotation(self):
-        session = MockSession(None, None, None)
+        session = MockSession(None, None)
         store = MockFeatureTable(session)
         self.mox.StubOutWithMock(store, 'get_objects')
         self.mox.StubOutWithMock(session.us, 'saveAndReturnObject')
 
         ofile = omero.model.OriginalFileI(2)
         image = omero.model.ImageI(2)
-        store.get_objects('Image', 3).AndReturn(image)
+        store.get_objects('Image', {'id': 3}).AndReturn([image])
         mocklink = object()
 
         session.us.saveAndReturnObject(mox.Func(
