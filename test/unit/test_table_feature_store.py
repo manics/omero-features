@@ -77,6 +77,9 @@ class MockUpdateService:
     def saveAndReturnObject(self, o):
         pass
 
+    def deleteObject(self, o):
+        pass
+
 
 class MockQueryService:
     def findAllByQuery(self, q, p):
@@ -97,6 +100,14 @@ class MockSession:
 
     def sharedResources(self):
         return self.msr
+
+
+class MockOmeroObject:
+    def __init__(self, id):
+        self.id = wrap(id)
+
+    def getId(self):
+        return self.id
 
 
 class MockOriginalFile:
@@ -222,6 +233,13 @@ class TestFeatureTable(object):
 
     def teardown_method(self, method):
         self.mox.UnsetStubs()
+
+    def parameters_equal(self, a, b):
+        return a.map == b.map and (
+            (a.theFilter is None and b.theFilter is None) or
+            (a.theFilter.__dict__ == b.theFilter.__dict__)) and (
+            (a.theOptions is None and b.theOptions is None) or
+            (a.theOptions.__dict__ == b.theOptions.__dict__))
 
     def test_close(self):
         table = self.mox.CreateMock(MockTable)
@@ -506,14 +524,6 @@ class TestFeatureTable(object):
         self.mox.VerifyAll()
 
     def test_get_objects(self):
-        def parameters_equal(a, b):
-            print a, b
-            return a.map == b.map and (
-                (a.theFilter is None and b.theFilter is None) or
-                (a.theFilter.__dict__ == b.theFilter.__dict__)) and (
-                (a.theOptions is None and b.theOptions is None) or
-                (a.theOptions.__dict__ == b.theOptions.__dict__))
-
         session = MockSession(None, None)
         store = MockFeatureTable(session)
         self.mox.StubOutWithMock(session.qs, 'findAllByQuery')
@@ -529,7 +539,7 @@ class TestFeatureTable(object):
         m = object()
 
         session.qs.findAllByQuery(q, mox.Func(
-            lambda o: parameters_equal(params, o))).AndReturn([m])
+            lambda o: self.parameters_equal(params, o))).AndReturn([m])
 
         self.mox.ReplayAll()
 
@@ -556,6 +566,57 @@ class TestFeatureTable(object):
         assert store.create_file_annotation(
             'Image', 3, 'ns', ofile) == mocklink
         self.mox.VerifyAll()
+
+    def test_delete(self):
+        table = self.mox.CreateMock(MockTable)
+        session = MockSession(1, table)
+        store = MockFeatureTable(session)
+        store.table = table
+
+        self.mox.StubOutWithMock(store, 'close')
+        self.mox.StubOutWithMock(table, 'getOriginalFile')
+        self.mox.StubOutWithMock(store, '_get_annotation_link_types')
+        self.mox.StubOutWithMock(session.qs, 'findAllByQuery')
+        self.mox.StubOutWithMock(session.us, 'deleteObject')
+
+        store.close()
+
+        fid = 123
+        mf = MockOriginalFile(fid, 'table-name', store.ft_space)
+        table.getOriginalFile().AndReturn(mf)
+
+        store._get_annotation_link_types().AndReturn(
+            ['ImageAnnotationLink', 'RoiAnnotationLink'])
+
+        mockimlink = MockOmeroObject(12)
+        mockfileann = MockOmeroObject(34)
+        params = omero.sys.ParametersI()
+        params.addId(fid)
+        session.qs.findAllByQuery(
+            'SELECT al FROM ImageAnnotationLink al WHERE al.child.file.id=:id',
+            mox.Func(lambda o: self.parameters_equal(params, o))).AndReturn(
+            [mockimlink])
+        session.qs.findAllByQuery(
+            'SELECT al FROM RoiAnnotationLink al WHERE al.child.file.id=:id',
+            mox.Func(lambda o: self.parameters_equal(params, o))).AndReturn([])
+        session.qs.findAllByQuery(
+            'SELECT ann FROM FileAnnotation ann WHERE ann.file.id=:id',
+            mox.Func(lambda o: self.parameters_equal(params, o))).AndReturn(
+            [mockfileann])
+
+        session.us.deleteObject(mockimlink)
+        session.us.deleteObject(mockfileann)
+        session.us.deleteObject(mf)
+
+        self.mox.ReplayAll()
+        store.delete()
+        self.mox.VerifyAll()
+
+    def test_get_annotation_link_types(self):
+        store = MockFeatureTable(None)
+        types = store._get_annotation_link_types()
+        assert 'ImageAnnotationLink' in types
+        assert 'RoiAnnotationLink' in types
 
 
 class TestFeatureTableStore(object):

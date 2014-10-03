@@ -374,38 +374,43 @@ class FeatureTable(object):
         ann = self.session.getUpdateService().saveAndReturnObject(link)
         return ann
 
-
     def delete(self):
         # There's a bug (?) which means multiple FileAnnotations with the same
         # OriginalFile child can't be deleted using the graph spec methods.
         # For now just delete everything individually
+
+        self.close()
+
         qs = self.session.getQueryService()
-        fid = unwrap(self.table.getOriginalFile().getId())
+        tof = self.table.getOriginalFile()
+        fid = unwrap(tof.getId())
         params = omero.sys.ParametersI()
         params.addId(fid)
         ds = []
 
-        linktypes = [s for s in dir(omero.model) if s.endswith(
-            'AnnotationLink') and not s.startswith('_')]
+        linktypes = self._get_annotation_link_types()
         for link in linktypes:
             r = qs.findAllByQuery(
-                'SELECT ial FROM %s ial WHERE ial.child.file.id=:id' % link,
+                'SELECT al FROM %s al WHERE al.child.file.id=:id' % link,
                 params)
             ds.extend(r)
 
         r = qs.findAllByQuery(
             'SELECT ann FROM FileAnnotation ann WHERE ann.file.id=:id', params)
         ds.extend(r)
-        ds.append(qs.get('OriginalFile', fid))
+        ds.append(tof)
 
         print 'Deleting: %s' % [
             (d.__class__.__name__, unwrap(d.getId())) for d in ds]
 
         us = self.session.getUpdateService()
-        self.close()
         for d in ds:
             us.deleteObject(d)
 
+    @staticmethod
+    def _get_annotation_link_types():
+        return [s for s in dir(omero.model) if s.endswith(
+            'AnnotationLink') and not s.startswith('_')]
 
 
 class LRUCache(object):
