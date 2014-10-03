@@ -68,7 +68,8 @@ class UserAccount(object):
         e.omeName = rstring(name)
         e.firstName = rstring(name)
         e.lastName = rstring(name)
-        uid = adminService.createUser(e, group)
+        uid = adminService.createExperimenterWithPassword(
+            e, rstring(name), g, [g, adminService.lookupGroup('user')])
         e = adminService.lookupExperimenter(name)
         if admin:
             adminService.setGroupOwner(g, e)
