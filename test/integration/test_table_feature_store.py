@@ -81,10 +81,12 @@ class TableStoreHelper(object):
         return tid, cols
 
     @staticmethod
-    def create_image(sess):
+    def create_image(sess, **kwargs):
         im = omero.model.ImageI()
         im.setAcquisitionDate(omero.rtypes.rtime(0))
         im.setName(rstring(None))
+        for k, v in kwargs.iteritems():
+            setattr(im, k, wrap(v))
         im = sess.getUpdateService().saveAndReturnObject(im)
         return im
 
@@ -229,3 +231,74 @@ class TestFeatureTable(object):
         assert rvalues[0] == (0, 34, [90], [80, 70])
 
         store.close()
+
+    def test_get_objects(self):
+        ims = [
+            TableStoreHelper.create_image(self.sess, name='image-test'),
+            TableStoreHelper.create_image(self.sess, name='other-test'),
+            TableStoreHelper.create_image(self.sess, name='image-test')
+        ]
+        store = FeatureTableProxy(
+            self.sess, self.name, self.ft_space, self.ann_space)
+
+        rs = store.get_objects('Image', {'name': 'image-test'})
+        assert sorted(unwrap(r.getId()) for r in rs) == unwrap(
+            [ims[0].getId(), ims[2].getId()])
+
+    def test_create_file_annotation(self):
+        tid, tcols = TableStoreHelper.create_table(
+            self.sess, self.ft_space, self.name)
+        imageid = unwrap(TableStoreHelper.create_image(self.sess).getId())
+        ofile = self.sess.getQueryService().get(
+            'omero.model.OriginalFile', tid)
+        store = FeatureTableProxy(
+            self.sess, self.name, self.ft_space, self.ann_space)
+
+        link = store.create_file_annotation(
+            'Image', imageid, self.ann_space, ofile)
+        p = link.getParent()
+        c = link.getChild()
+        assert isinstance(p, omero.model.Image)
+        assert isinstance(c, omero.model.FileAnnotation)
+        assert unwrap(p.getId()) == imageid
+        assert unwrap(c.getFile().getId()) == tid
+
+    def test_delete(self):
+        iid1 = unwrap(TableStoreHelper.create_image(self.sess).getId())
+        iid2 = unwrap(TableStoreHelper.create_image(self.sess).getId())
+        store = FeatureTableProxy(
+            self.sess, self.name, self.ft_space, self.ann_space)
+        ofile = store.get_table([('x', 1)]).getOriginalFile()
+
+        link1 = store.create_file_annotation(
+            'Image', iid1, self.ann_space, ofile)
+        link2 = store.create_file_annotation(
+            'Image', iid2, self.ann_space, ofile)
+
+        def get(obj):
+            print obj.__class__.__base__, unwrap(obj.getId())
+            # Fetch the latest copy of an object
+            return self.sess.getQueryService().find(
+                'omero.model.%s' % obj.__class__.__name__, unwrap(obj.getId()))
+
+        assert get(link1) is not None
+        assert get(link1.getParent()) is not None
+        assert get(link1.getChild())
+        assert get(link1.getChild().getFile())
+
+        assert get(link2)
+        assert get(link2.getParent())
+        assert get(link2.getChild())
+        assert get(link2.getChild().getFile())
+
+        store.delete()
+
+        assert get(link1) is None
+        assert get(link1.getParent())
+        assert get(link1.getChild()) is None
+        assert get(link1.getChild().getFile()) is None
+
+        assert get(link2) is None
+        assert get(link2.getParent())
+        assert get(link2.getChild()) is None
+        assert get(link2.getChild().getFile()) is None

@@ -579,8 +579,6 @@ class TestFeatureTable(object):
         self.mox.StubOutWithMock(session.qs, 'findAllByQuery')
         self.mox.StubOutWithMock(session.us, 'deleteObject')
 
-        store.close()
-
         fid = 123
         mf = MockOriginalFile(fid, 'table-name', store.ft_space)
         table.getOriginalFile().AndReturn(mf)
@@ -603,6 +601,8 @@ class TestFeatureTable(object):
             'SELECT ann FROM FileAnnotation ann WHERE ann.file.id=:id',
             mox.Func(lambda o: self.parameters_equal(params, o))).AndReturn(
             [mockfileann])
+
+        store.close()
 
         session.us.deleteObject(mockimlink)
         session.us.deleteObject(mockfileann)

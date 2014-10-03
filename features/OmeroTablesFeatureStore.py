@@ -371,16 +371,13 @@ class FeatureTable(object):
         ann.setFile(ofile)
         link.setParent(obj[0])
         link.setChild(ann)
-        ann = self.session.getUpdateService().saveAndReturnObject(link)
-        return ann
+        link = self.session.getUpdateService().saveAndReturnObject(link)
+        return link
 
     def delete(self):
         # There's a bug (?) which means multiple FileAnnotations with the same
         # OriginalFile child can't be deleted using the graph spec methods.
         # For now just delete everything individually
-
-        self.close()
-
         qs = self.session.getQueryService()
         tof = self.table.getOriginalFile()
         fid = unwrap(tof.getId())
@@ -404,6 +401,7 @@ class FeatureTable(object):
             (d.__class__.__name__, unwrap(d.getId())) for d in ds]
 
         us = self.session.getUpdateService()
+        self.close()
         for d in ds:
             us.deleteObject(d)
 
