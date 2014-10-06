@@ -669,110 +669,70 @@ class TestFeatureTable(object):
         assert 'RoiAnnotationLink' in types
 
 
-class TestFeatureTableStore(object):
+class TestFeatureTableManager(object):
 
     def setup_method(self, method):
         self.mox = mox.Mox()
-        self.fsmeta = {'name': 'a', 'version': '1'}
-        self.rowmetas = [{'id': '1'}, {'id': '2'}]
-        self.valuess = [[1.0, 2.0], [-1.0, -2.0]]
 
     def teardown_method(self, method):
         self.mox.UnsetStubs()
 
     def test_init(self):
-        fts = OmeroTablesFeatureStore.FeatureTableStore(None)
-        assert fts.column_space == 'omero.features/0.1/featureset'
-        assert fts.row_space == 'omero.features/0.1/sample'
+        fts = OmeroTablesFeatureStore.FeatureTableManager(None)
+        assert fts.ft_space == 'omero.features/0.1/features'
+        assert fts.ann_space == 'omero.features/0.1/source'
 
-        fts = OmeroTablesFeatureStore.FeatureTableStore(None, namespace='x')
-        assert fts.column_space == 'x/featureset'
-        assert fts.row_space == 'x/sample'
+        fts = OmeroTablesFeatureStore.FeatureTableManager(None, namespace='x')
+        assert fts.ft_space == 'x/features'
+        assert fts.ann_space == 'x/source'
 
-        fts = OmeroTablesFeatureStore.FeatureTableStore(
-            None, column_space='x', row_space='y')
-        assert fts.column_space == 'x'
-        assert fts.row_space == 'y'
+        fts = OmeroTablesFeatureStore.FeatureTableManager(
+            None, ft_space='y', ann_space='z')
+        assert fts.ft_space == 'y'
+        assert fts.ann_space == 'z'
 
-    def test_create_feature_set(self):
-        fs = MockFeatureSetTableStore(None, None, None)
-        self.mox.StubOutWithMock(
-            OmeroTablesFeatureStore, 'FeatureSetTableStore')
-        fsmeta = {'version': '1.2.3', 'fsname': 'a'}
-        fskey = (('fsname', 'a'), ('version', '1.2.3'))
-        col_desc = [(int, 'x', 1)]
-        fts = OmeroTablesFeatureStore.FeatureTableStore(None)
+    def test_create(self):
+        fs = MockFeatureTable(None)
+        self.mox.StubOutWithMock(OmeroTablesFeatureStore, 'FeatureTable')
+        fsname = 'fsname'
+        colnames = ['x1', 'x2']
+        colwidths = [2, 1]
 
-        OmeroTablesFeatureStore.FeatureSetTableStore(
-            None, 'omero.features/0.1/featureset', 'omero.features/0.1/sample',
-            fsmeta, col_desc).AndReturn(fs)
+        OmeroTablesFeatureStore.FeatureTable(
+            None, fsname, 'x/features', 'x/source').AndReturn(None)
+
+        OmeroTablesFeatureStore.FeatureTable(
+            None, fsname, 'x/features', 'x/source', [('x1', 2), ('x2', 1)]
+            ).AndReturn(fs)
 
         self.mox.ReplayAll()
-        fts.create_feature_set(fsmeta, col_desc)
+
+        fts = OmeroTablesFeatureStore.FeatureTableManager(None, namespace='x')
+        assert fts.create(fsname, colnames, colwidths) == fs
+
         assert len(fts.fss) == 1
-        assert fts.fss.get(fskey) == fs
+        assert fts.fss.get(fsname) == fs
+
         self.mox.VerifyAll()
 
     @pytest.mark.parametrize('opened', [True, False])
-    def test_get_feature_set(self, opened):
-        fs = MockFeatureSetTableStore(None, None, None)
-        self.mox.StubOutWithMock(
-            OmeroTablesFeatureStore, 'FeatureSetTableStore')
-        fsmeta = {'version': '1.2.3', 'fsname': 'a'}
-        fskey = (('fsname', 'a'), ('version', '1.2.3'))
-        fts = OmeroTablesFeatureStore.FeatureTableStore(None)
+    def test_get(self, opened):
+        fs = MockFeatureTable(None)
+        self.mox.StubOutWithMock(OmeroTablesFeatureStore, 'FeatureTable')
+        fsname = 'fsname'
+        fts = OmeroTablesFeatureStore.FeatureTableManager(None, namespace='x')
 
         self.mox.StubOutWithMock(fts.fss, 'get')
         self.mox.StubOutWithMock(fts.fss, 'insert')
 
         if opened:
-            fts.fss.get(fskey).AndReturn(fs)
+            fts.fss.get(fsname).AndReturn(fs)
         else:
-            fts.fss.get(fskey).AndReturn(None)
-            OmeroTablesFeatureStore.FeatureSetTableStore(
-                None, 'omero.features/0.1/featureset',
-                'omero.features/0.1/sample', fsmeta).AndReturn(fs)
-            fts.fss.insert(fskey, fs)
+            fts.fss.get(fsname).AndReturn(None)
+            OmeroTablesFeatureStore.FeatureTable(
+                None, fsname, 'x/features', 'x/source').AndReturn(fs)
+            fts.fss.insert(fsname, fs)
         self.mox.ReplayAll()
 
-        assert fts.get_feature_set(fsmeta) == fs
-        self.mox.VerifyAll()
-
-    def test_store(self):
-        fts = OmeroTablesFeatureStore.FeatureTableStore(None)
-        self.mox.StubOutWithMock(fts, 'get_feature_set')
-
-        fsmeta = {'fsname': 'a'}
-        rowmetas = [{'objectid': 1}, {'objectid': 2}]
-        values = [[1], [2]]
-
-        fs = MockFeatureSetTableStore(None, None, fsmeta)
-        self.mox.StubOutWithMock(fs, 'store')
-
-        fts.get_feature_set(fsmeta).AndReturn(fs)
-        fs.store(rowmetas, values)
-        self.mox.ReplayAll()
-
-        fts.store(fsmeta, rowmetas, values)
-        self.mox.VerifyAll()
-
-    def test_fetch(self):
-        fts = OmeroTablesFeatureStore.FeatureTableStore(None)
-        self.mox.StubOutWithMock(fts, 'get_feature_set')
-        fsquery = {'name': 'a'}
-        rowquery = {'objectid': 1}
-        values = [([1], [2])]
-        fs = MockFeatureSetTableStore(None, None, fsquery)
-        self.mox.StubOutWithMock(fs, 'fetch')
-
-        fts.get_feature_set(fsquery).AndReturn(fs)
-        fs.fetch(rowquery).AndReturn(([rowquery], values))
-
-        self.mox.ReplayAll()
-
-        ra, rv = fts.fetch(fsquery, rowquery)
-        assert len(ra) == 1
-        assert len(rv) == 1
-        assert ra[0] == rowquery
-        assert rv == values
+        assert fts.get(fsname) == fs
         self.mox.VerifyAll()

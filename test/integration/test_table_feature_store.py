@@ -97,7 +97,7 @@ class TableStoreHelper(object):
         return roi
 
 
-class TestFeatureTable(object):
+class TableStoreTestHelper(object):
 
     def setup_class(self):
         self.ua = UserAccount()
@@ -117,6 +117,9 @@ class TestFeatureTable(object):
 
     def teardown_method(self, method):
         self.cli.closeSession()
+
+
+class TestFeatureTable(TableStoreTestHelper):
 
     @pytest.mark.parametrize('exists', [True, False])
     def test_get_table(self, exists):
@@ -302,3 +305,48 @@ class TestFeatureTable(object):
         assert get(link2.getParent())
         assert get(link2.getChild()) is None
         assert get(link2.getChild().getFile()) is None
+
+
+class TestFeatureTableManager(TableStoreTestHelper):
+
+    def test_create(self, fsname='fsname-create'):
+        colnames = ['x1', 'x2']
+        colwidths = [2, 1]
+        fts = OmeroTablesFeatureStore.FeatureTableManager(
+            self.sess, ft_space=self.ft_space, ann_space=self.ann_space)
+        fs = fts.create(fsname, colnames, colwidths)
+
+        expected_cols = [
+            omero.grid.ImageColumn('ImageID', ''),
+            omero.grid.RoiColumn('RoiID', ''),
+            omero.grid.DoubleArrayColumn('x1', '', 2),
+            omero.grid.DoubleArrayColumn('x2', '', 1)
+        ]
+        h = fs.get_table().getHeaders()
+        TableStoreHelper.assert_coltypes_equal(expected_cols, h)
+
+        with pytest.raises(OmeroTablesFeatureStore.TooManyTablesException):
+            fs = fts.create(fsname, colnames, colwidths)
+
+    def test_get(self):
+        fsname1 = 'fsname-get1'
+        fsname2 = 'fsname-get2'
+        fts = OmeroTablesFeatureStore.FeatureTableManager(
+            self.sess, ft_space=self.ft_space, ann_space=self.ann_space)
+
+        with pytest.raises(OmeroTablesFeatureStore.NoTableMatchException):
+            fts.get(fsname1)
+
+        self.test_create(fsname1)
+
+        fs1 = fts.get(fsname1)
+        assert fs1 is not None
+
+        assert fs1 == fts.get(fsname1)
+
+        self.test_create(fsname2)
+        fs2 = fts.get(fsname2)
+        assert fs2 is not None
+
+        assert unwrap(fs1.get_table().getOriginalFile().getId()) != unwrap(
+            fs2.get_table().getOriginalFile().getId())
