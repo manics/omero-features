@@ -23,6 +23,8 @@
 OMERO.features abstract API
 """
 
+from abc import ABCMeta, abstractmethod
+
 
 class AbstractFeatureRow(object):
     """
@@ -30,18 +32,21 @@ class AbstractFeatureRow(object):
 
     Each row consists of a list of arrays of doubles
     """
-    pass
+
+    __metaclass__ = ABCMeta
 
     def __init__(self, widths=None, names=None, values=None):
         self._widths = widths
         self._names = names
         self._values = values
 
+    @abstractmethod
     def __getitem__(self, key):
-        raise Exception('Not implemented')
+        pass
 
+    @abstractmethod
     def __setitem__(self, key, value):
-        raise Exception('Not implemented')
+        pass
 
     @property
     def names(self):
@@ -56,54 +61,69 @@ class AbstractFeatureRow(object):
         return self._values
 
 
-class AbstractFeatureStorageManager(object):
+class AbstractFeatureStore(object):
     """
-    Manages multiple feature stores
+    A single feature store
 
     Each entry in a feature store consists of a FeatureRow
     """
 
-    def create(self, featureset_name, names, widths):
-        """
-        Create a new feature store
+    __metaclass__ = ABCMeta
 
-        :param featureset_name: The featureset identifier
-        :param names: A list of feature names
-        :param widths: A list of widths of each feature
-        """
-        raise Exception('Not implemented')
-
-    def store(self, featureset_name, image_id, roi_id, values):
+    @abstractmethod
+    def store(self, image_id, roi_id, values):
         """
         Store a row of features identified by Image ID and/or ROI ID
 
-        :param featureset_name: The featureset identifier
         :param image_id: The Image ID
         :param roi_id: The ROI ID, may be None
         :params values: A list of FeatureRows
         """
-        raise Exception('Not implemented')
+        pass
 
-    def fetch_by_image(self, featureset_name, image_id):
+    @abstractmethod
+    def store_by_image(self, image_id, values):
+        """
+        Store a single FeatureRow by Image ID
+
+        :param image_id: The Image ID
+        :param values: The feature values
+        :return: A FeatureRow
+        """
+        pass
+
+    @abstractmethod
+    def store_by_roi(self, roi_id, values):
+        """
+        Store a single FeatureRow by Image ID
+
+        :param image_id: The Image ID
+        :param values: The feature values
+        :return: A FeatureRow
+        """
+        pass
+
+    @abstractmethod
+    def fetch_by_image(self, image_id):
         """
         Retrieve a single FeatureRow by Image ID
 
-        :param featureset_name: The featureset identifier
         :param image_id: The Image ID
         :return: A FeatureRow
         """
-        raise Exception('Not implemented')
+        pass
 
-    def fetch_by_roi(self, featureset_name, roi_id):
+    @abstractmethod
+    def fetch_by_roi(self, roi_id):
         """
         Retrieve a single FeatureRow by ROI ID
 
-        :param featureset_name: The featureset identifier
         :param roi_id: The ROI ID
         :return: A FeatureRow
         """
-        raise Exception('Not implemented')
+        pass
 
+    @abstractmethod
     def fetch_all(self, featureset_name, image_id):
         """
         Retrieve all rows of features identified by Image ID
@@ -112,9 +132,9 @@ class AbstractFeatureStorageManager(object):
         :param image_id: The Image ID
         :return: A list of FeatureRows
         """
-        raise Exception('Not implemented')
+        pass
 
-
+    #@abstractmethod
     def filter(self, featureset_name, conditions):
         """
         Retrieve the features and Image/ROI IDs which fulfill the conditions
@@ -124,3 +144,32 @@ class AbstractFeatureStorageManager(object):
         :return: A list of (Image-ID, ROI-ID, FeatureRow) triplets
         """
         raise Exception('Not implemented')
+
+
+class AbstractFeatureStorageManager(object):
+    """
+    Manages multiple feature stores
+    """
+
+    __metaclass__ = ABCMeta
+
+    @abstractmethod
+    def create(self, featureset_name, names, widths):
+        """
+        Create a new feature store
+
+        :param featureset_name: The featureset identifier
+        :param names: A list of feature names
+        :param widths: A list of widths of each feature
+        """
+        pass
+
+    @abstractmethod
+    def open(self, featureset_name):
+        """
+        Open an existing feature store
+
+        :param featureset_name: The featureset identifier
+        :return: An AbstractFeatureStore
+        """
+        pass
