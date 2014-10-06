@@ -1,4 +1,3 @@
-import OmeroMetadata
 import OmeroTablesFeatureStore
 
-__all__ = ['OmeroMetadata', 'OmeroTablesFeatureStore']
+__all__ = ['OmeroTablesFeatureStore']
