@@ -166,7 +166,6 @@ class FeatureTable(AbstractFeatureStore):
         self.ann_space = ann_space
         self.cols = None
         self.table = None
-        self.header = None
         self.chunk_size = None
         self.get_table(coldesc)
 
@@ -312,7 +311,7 @@ class FeatureTable(AbstractFeatureStore):
 
     def feature_row(self, values):
         return FeatureRow(
-            names=[h.name for h in self.header[2:]], values=values[2:])
+            names=[h.name for h in self.cols[2:]], values=values[2:])
 
     def get_chunk_size(self):
         """

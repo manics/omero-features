@@ -525,9 +525,8 @@ class TestFeatureTable(object):
 
     def test_feature_row(self):
         store = MockFeatureTable(None)
-        store.header = [MockColumn('ignore'), MockColumn('ignore'),
-                        MockColumn('a'), MockColumn('b')]
-
+        store.cols = [MockColumn('ignore'), MockColumn('ignore'),
+                      MockColumn('a'), MockColumn('b')]
         row = [0, 0, [1], [2, 3]]
 
         self.mox.ReplayAll()
