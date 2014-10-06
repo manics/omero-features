@@ -447,7 +447,7 @@ class TestFeatureTable(object):
         store.feature_row(values).AndReturn(r)
 
         self.mox.ReplayAll()
-        store.fetch_by_image(1)
+        assert store.fetch_by_image(1) == r
         self.mox.VerifyAll()
 
     def test_fetch_by_roi(self):
@@ -461,7 +461,23 @@ class TestFeatureTable(object):
         store.feature_row(values).AndReturn(r)
 
         self.mox.ReplayAll()
-        store.fetch_by_roi(1)
+        assert store.fetch_by_roi(1) == r
+        self.mox.VerifyAll()
+
+    def test_fetch_all(self):
+        store = MockFeatureTable(None)
+        self.mox.StubOutWithMock(store, 'fetch_by_object')
+        self.mox.StubOutWithMock(store, 'feature_row')
+        valuess = [(1, 0, [5]), (2, 0, [6])]
+        r1 = object()
+        r2 = object()
+
+        store.fetch_by_object('Image', 1).AndReturn(valuess)
+        store.feature_row(valuess[0]).AndReturn(r1)
+        store.feature_row(valuess[1]).AndReturn(r2)
+
+        self.mox.ReplayAll()
+        assert store.fetch_all(1) == [r1, r2]
         self.mox.VerifyAll()
 
     @pytest.mark.parametrize('ncols', [1, 2])

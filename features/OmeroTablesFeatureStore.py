@@ -290,6 +290,10 @@ class FeatureTable(AbstractFeatureStore):
                 'Multiple feature rows found for Roi %d' % roi_id)
         return self.feature_row(values[0])
 
+    def fetch_all(self, image_id):
+        values = self.fetch_by_object('Image', image_id)
+        return [self.feature_row(v) for v in values]
+
     def fetch_by_object(self, object_type, object_id):
         if object_type in ('Image', 'Roi'):
             cond = '(%sID==%d)' % (object_type, object_id)

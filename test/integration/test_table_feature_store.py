@@ -214,17 +214,17 @@ class TestFeatureTable(object):
         store = FeatureTableProxy(
             self.sess, self.name, self.ft_space, self.ann_space)
         store.open_table(omero.model.OriginalFileI(tid))
-        tcols[0].values = [12, 0]
-        tcols[1].values = [0, 34]
-        tcols[2].values = [[10], [90]]
-        tcols[3].values = [[20, 30], [80, 70]]
+        tcols[0].values = [12, 0, 12]
+        tcols[1].values = [0, 34, 56]
+        tcols[2].values = [[10], [90], [20]]
+        tcols[3].values = [[20, 30], [80, 70], [40, 50]]
         store.table.addData(tcols)
-        assert store.table.getNumberOfRows() == 2
+        assert store.table.getNumberOfRows() == 3
 
         rvalues = store.fetch_by_object('Image', 12)
-        print rvalues
-        assert len(rvalues) == 1
+        assert len(rvalues) == 2
         assert rvalues[0] == (12, 0, [10], [20, 30])
+        assert rvalues[1] == (12, 56, [20], [40, 50])
 
         rvalues = store.fetch_by_object('Roi', 34)
         assert len(rvalues) == 1
