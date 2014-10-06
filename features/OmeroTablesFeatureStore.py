@@ -447,9 +447,6 @@ class LRUCache(object):
         self.cache[key] = [value, self.counter]
 
     def remove_oldest(self):
-        key = None
-        c = self.counter
-        print c, self.cache
         mink, minv = min(self.cache.iteritems(), key=lambda kv: kv[1][1])
         return self.cache.pop(mink)[0]
 
