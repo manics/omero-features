@@ -248,8 +248,8 @@ class TestFeatureRow(object):
         with pytest.raises(OmeroTablesFeatureStore.FeatureRowException):
             fr.values = [[0], [0]]
 
-        assert fr.get_index('a') == 0
-        assert fr.get_index('b') == 1
+        assert fr._get_index('a') == (0, False)
+        assert fr._get_index('b') == (1, False)
         assert fr['a'] == [1]
         assert fr['b'] == [2, 3]
 
@@ -258,6 +258,20 @@ class TestFeatureRow(object):
 
         with pytest.raises(OmeroTablesFeatureStore.FeatureRowException):
             fr['b'] = [0]
+
+    def test_metavalues(self):
+        fr = OmeroTablesFeatureStore.FeatureRow(
+            names=['a', 'b'], widths=[1, 2], metanames=['ma', 'mb'])
+
+        with pytest.raises(OmeroTablesFeatureStore.FeatureRowException):
+            fr.metavalues = ['va']
+        fr.metavalues = ['x', 'y']
+
+        assert fr._get_index('ma') == (0, True)
+        assert fr._get_index('mb') == (1, True)
+
+        fr['ma'] = 'z'
+        assert fr.metavalues == ['z', 'y']
 
 
 class TestFeatureTable(object):
@@ -525,15 +539,17 @@ class TestFeatureTable(object):
 
     def test_feature_row(self):
         store = MockFeatureTable(None)
-        store.cols = [MockColumn('ignore'), MockColumn('ignore'),
+        store.cols = [MockColumn('ma'), MockColumn('mb'),
                       MockColumn('a'), MockColumn('b')]
-        row = [0, 0, [1], [2, 3]]
+        row = [10, 20, [1], [2, 3]]
 
         self.mox.ReplayAll()
         rv = store.feature_row(row)
         assert rv.names == ['a', 'b']
         assert rv.widths == [1, 2]
         assert rv.values == row[2:]
+        assert rv.metanames == ['ma', 'mb']
+        assert rv.metavalues == [10, 20]
         self.mox.VerifyAll()
 
     def test_get_chunk_size(self):

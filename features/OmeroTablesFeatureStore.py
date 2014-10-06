@@ -81,7 +81,8 @@ class FeatureRowException(TableStoreException):
 
 class FeatureRow(AbstractFeatureRow):
 
-    def __init__(self, widths=None, names=None, values=None):
+    def __init__(self, widths=None, names=None, values=None,
+            metanames=None, metavalues=None):
         if not widths and not values:
             raise FeatureRowException(
                 'At least one of widths or values must be provided')
@@ -95,26 +96,52 @@ class FeatureRow(AbstractFeatureRow):
         self._values = None
         if values:
             self.values = values
-        self._namemap = {}
 
-    def get_index(self, name):
+        self._metanames = metanames
+        self._metavalues = None
+        if metavalues:
+            self.metavalues = metavalues
+
+        self._namemap = {}
+        self._metanamemap = {}
+
+    def _get_index(self, name):
         try:
-            return self._namemap[name]
+            return self._namemap[name], False
         except KeyError:
-            self._namemap = dict(
-                ni for ni in zip(self._names, xrange(len(self._names))))
-            return self._namemap[name]
+            pass
+        try:
+            return self._metanamemap[name], True
+        except KeyError:
+            pass
+
+        if self._names and not self._namemap:
+            self._namemap = dict(ni for ni in zip(
+                self._names, xrange(len(self._names))))
+        if self._metanames and not self._metanamemap:
+            self._metanamemap = dict(ni for ni in zip(
+                self._metanames, xrange(len(self._metanames))))
+        try:
+            return self._namemap[name], False
+        except KeyError:
+            return self._metanamemap[name], True
 
     def __getitem__(self, key):
-        return self.values[self.get_index(key)]
+        i, m = self._get_index(key)
+        if m:
+            return self.metavalues[i]
+        return self.values[i]
 
     def __setitem__(self, key, value):
-        i = self.get_index(key)
-        if len(value) != self._widths[i]:
+        i, m = self._get_index(key)
+        if m:
+            self.metavalues[i] = value
+        elif len(value) != self._widths[i]:
             raise FeatureRowException(
                 'Expected array of length %d, received %d' % (
                     len(value), self._widths[i]))
-        self.values[i] = value
+        else:
+            self.values[i] = value
 
     @property
     def names(self):
@@ -148,9 +175,31 @@ class FeatureRow(AbstractFeatureRow):
     def values(self):
         del self._values
 
+    @property
+    def metanames(self):
+        return self._metanames
+
+    @property
+    def metavalues(self):
+        return self._metavalues
+
+    @metavalues.setter
+    def metavalues(self, value):
+        if self._metanames and len(self._metanames) != len(value):
+            raise FeatureRowException(
+                'Expected %d elements, received %d' % (
+                    len(self._metanames), len(value)))
+        self._metavalues = value
+
+    @metavalues.deleter
+    def metavalues(self):
+        del self._metavalues
+
     def __repr__(self):
-        return '%s(widths=%r, names=%r, values=%r)' % (
-            self.__class__.__name__, self._widths, self._names, self._values)
+        return (
+            '%s(widths=%r, names=%r, values=%r, metanames=%r, metavalues=%r)' %
+            (self.__class__.__name__, self._widths, self._names, self._values,
+             self._metanames, self._metavalues))
 
 
 class FeatureTable(AbstractFeatureStore):
@@ -311,7 +360,9 @@ class FeatureTable(AbstractFeatureStore):
 
     def feature_row(self, values):
         return FeatureRow(
-            names=[h.name for h in self.cols[2:]], values=values[2:])
+            names=[h.name for h in self.cols[2:]],
+            metanames=[h.name for h in self.cols[:2]],
+            values=values[2:], metavalues=values[:2])
 
     def get_chunk_size(self):
         """
