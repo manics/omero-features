@@ -23,7 +23,7 @@
 Implementation of the OMERO.features AbstractAPI
 """
 
-import AbstractAPI
+from AbstractAPI import AbstractFeatureRow, AbstractFeatureStore
 import omero
 from omero.rtypes import unwrap, wrap
 
@@ -78,7 +78,7 @@ class FeatureRowException(TableStoreException):
     pass
 
 
-class FeatureRow(AbstractAPI.AbstractFeatureRow):
+class FeatureRow(AbstractFeatureRow):
 
     def __init__(self, widths=None, names=None, values=None):
         if not widths and not values:
@@ -152,7 +152,7 @@ class FeatureRow(AbstractAPI.AbstractFeatureRow):
             self.__class__.__name__, self._widths, self._names, self._values)
 
 
-class FeatureTable(object):
+class FeatureTable(AbstractFeatureStore):
     """
     A feature store.
     Each row is an array of fixed width DoubleArrays
@@ -209,6 +209,7 @@ class FeatureTable(object):
         # Name may not be split into dirname (path) and basename (name)
         # components https://trac.openmicroscopy.org.uk/ome/ticket/12576
         tof = self.table.getOriginalFile()
+        tid = unwrap(tof.getId())
         if (unwrap(tof.getPath()) != self.ft_space or
                 unwrap(tof.getName()) != self.name):
             print 'Overriding table path and name'
@@ -235,7 +236,7 @@ class FeatureTable(object):
         self.cols = self.table.getHeaders()
         if not self.cols:
             raise OmeroTableException(
-                'Failed to get columns for table ID:%d' % unwrap(tof.getId()))
+                'Failed to get columns for table ID:%d' % tid)
 
     def open_table(self, tablefile):
         tid = unwrap(tablefile.getId())
@@ -277,14 +278,14 @@ class FeatureTable(object):
 
     def fetch_by_image(self, image_id):
         values = self.fetch_by_object('Image', image_id)
-        if len(values) != 1:
+        if len(values) > 1:
             raise TableUsageException(
                 'Multiple feature rows found for Image %d' % image_id)
         return self.feature_row(values[0])
 
     def fetch_by_roi(self, roi_id):
         values = self.fetch_by_object('Roi', roi_id)
-        if len(values) != 1:
+        if len(values) > 1:
             raise TableUsageException(
                 'Multiple feature rows found for Roi %d' % roi_id)
         return self.feature_row(values[0])
@@ -428,6 +429,8 @@ class LRUCache(object):
     def get(self, key, miss=None):
         try:
             v = self.cache[key]
+            self.counter += 1
+            v[1] = self.counter
             return v[0]
         except KeyError:
             return miss
@@ -441,26 +444,19 @@ class LRUCache(object):
     def remove_oldest(self):
         key = None
         c = self.counter
-        for k, v in self.cache.iteritems():
-            if v[1] <= c:
-                c = v[1]
-                key = k
-        del self.cache[key]
+        print c, self.cache
+        mink, minv = min(self.cache.iteritems(), key=lambda kv: kv[1][1])
+        return self.cache.pop(mink)[0]
 
 
-class LRUTableCache(LRUCache):
+class LRUClosableCache(LRUCache):
     """
-    Automatically closes a table handle when it is removed from the cache
+    Automatically call value.close() when an object is removed from the cache
     """
     def remove_oldest(self):
-        key = None
-        c = self.counter
-        for k, v in self.cache.iteritems():
-            if v[1] <= c:
-                c = v[1]
-                key = k
-        self.cache[key][0].close()
-        del self.cache[key]
+        v = super(LRUClosableCache, self).remove_oldest()
+        v.close()
+        return v
 
     def close(self):
         while self.cache:

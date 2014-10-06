@@ -31,7 +31,15 @@ from features import OmeroTablesFeatureStore
 
 class TestLRUCache(object):
 
-    def test_get_insert_remove_oldest(self):
+    class MockClosable:
+        def __init__(self):
+            self.closed = False
+
+        def close(self):
+            assert not self.closed
+            self.closed = True
+
+    def test_get_insert(self):
         c = OmeroTablesFeatureStore.LRUCache(2)
         assert len(c) == 0
 
@@ -51,11 +59,37 @@ class TestLRUCache(object):
         assert c.get('key2') == 2
         assert len(c) == 2
 
+    def test_remove_oldest(self):
+        c = OmeroTablesFeatureStore.LRUCache(2)
+
+        c.insert('key1', 1)
+        c.insert('key2', 2)
+        assert c.remove_oldest() == 1
+        assert c.cache.keys() == ['key2']
+
         c.insert('key3', 3)
-        assert c.get('key1') is None
-        assert c.get('key2') == 2
-        assert c.get('key3') == 3
-        assert len(c) == 2
+        c.get('key2')
+        assert c.remove_oldest() == 3
+        assert c.cache.keys() == ['key2']
+
+        c.insert('key3', 3)
+        c.get('key2')
+        c.insert('key4', 3)
+        assert sorted(c.cache.keys()) == ['key2', 'key4']
+
+    def test_lru_closable_cache(self):
+        o1 = self.MockClosable()
+        o2 = self.MockClosable()
+        c = OmeroTablesFeatureStore.LRUClosableCache(1)
+        c.insert('key1', o1)
+        c.insert('key2', o2)
+        assert c.cache.keys() == ['key2']
+        assert o1.closed
+        assert not o2.closed
+
+        c.close()
+        assert o2.closed
+        assert c.cache.keys() == []
 
 
 class MockSharedResources:
