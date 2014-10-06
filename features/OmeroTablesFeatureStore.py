@@ -23,7 +23,8 @@
 Implementation of the OMERO.features AbstractAPI
 """
 
-from AbstractAPI import AbstractFeatureRow, AbstractFeatureStore
+from AbstractAPI import (
+    AbstractFeatureRow, AbstractFeatureStore, AbstractFeatureStoreManager)
 import omero
 from omero.rtypes import unwrap, wrap
 
@@ -468,43 +469,48 @@ class LRUClosableCache(LRUCache):
             self.remove_oldest()
 
 
-class FeatureTableStore(AbstractFeatureStorage):
+class FeatureTableManager(AbstractFeatureStoreManager):
     """
-    Manage storage of feature files and feature-set/context metadata
+    Manage storage of feature table files
     """
 
     def __init__(self, session, **kwargs):
         self.session = session
         namespace = kwargs.get('namespace', DEFAULT_NAMESPACE)
-        self.column_space = kwargs.get(
-            'column_space', namespace + DEFAULT_COLUMN_SUBSPACE)
-        self.row_space = kwargs.get(
-            'row_space', namespace + DEFAULT_ROW_SUBSPACE)
+        self.ft_space = kwargs.get(
+            'ft_space', namespace + '/' + DEFAULT_FEATURE_SUBSPACE)
+        self.ann_space = kwargs.get(
+            'ann_space', namespace + '/' + DEFAULT_ANNOTATION_SUBSPACE)
         self.cachesize = kwargs.get('cachesize', 10)
-        self.fss = LRUTableCache(kwargs.get('cachesize', 10))
+        self.fss = LRUClosableCache(kwargs.get('cachesize', 10))
 
     def create(self, featureset_name, names, widths):
-        fskey = tuple(sorted(fsmeta.iteritems()))
-        r = FeatureSetTableStore(
-            self.session, self.column_space, self.row_space, fsmeta, col_desc)
-        self.fss.insert(fskey, r)
+        try:
+            fs = self.get(featureset_name)
+            if fs:
+                raise TooManyTablesException(
+                    'Featureset already exists: %s' % featureset_name)
+        except NoTableMatchException:
+            pass
 
-    def get_feature_set(self, fsmeta):
-        fskey = tuple(sorted(fsmeta.iteritems()))
-        r = self.fss.get(fskey)
-        if not r:
-            r = FeatureSetTableStore(
-                self.session, self.column_space, self.row_space, fsmeta)
-            self.fss.insert(fskey, r)
-        return r
+        if len(names) != len(widths):
+            raise TableUsageException('Invalid column names-widths')
 
-    def store(self, fsmeta, rowmetas, values):
-        fs = self.get_feature_set(fsmeta)
-        fs.store(rowmetas, values)
+        coldesc = zip(names, widths)
+        fs = FeatureTable(
+            self.session, featureset_name, self.ft_space, self.ann_space,
+            coldesc)
+        self.fss.insert(featureset_name, fs)
+        return fs
 
-    def fetch(self, fsquery, rowquery):
-        fs = self.get_feature_set(fsquery)
-        return fs.fetch(rowquery)
+    def get(self, featureset_name):
+        fs = self.fss.get(featureset_name)
+        if not fs:
+            fs = FeatureTable(
+                self.session, featureset_name, self.ft_space, self.ann_space)
+            # raises NoTableMatchException if not found
+            self.fss.insert(featureset_name, fs)
+        return fs
 
     def close(self):
         self.fss.close()

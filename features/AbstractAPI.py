@@ -146,7 +146,7 @@ class AbstractFeatureStore(object):
         raise Exception('Not implemented')
 
 
-class AbstractFeatureStorageManager(object):
+class AbstractFeatureStoreManager(object):
     """
     Manages multiple feature stores
     """
@@ -165,9 +165,9 @@ class AbstractFeatureStorageManager(object):
         pass
 
     @abstractmethod
-    def open(self, featureset_name):
+    def get(self, featureset_name):
         """
-        Open an existing feature store
+        Get an existing feature store
 
         :param featureset_name: The featureset identifier
         :return: An AbstractFeatureStore
