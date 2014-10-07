@@ -26,6 +26,7 @@ Implementation of the OMERO.features AbstractAPI
 from AbstractAPI import (
     AbstractFeatureRow, AbstractFeatureStore, AbstractFeatureStoreManager)
 import omero
+import omero.clients
 from omero.rtypes import unwrap, wrap
 
 import itertools
