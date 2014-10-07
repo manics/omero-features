@@ -553,7 +553,8 @@ class FeatureTableManager(AbstractFeatureStoreManager):
 
     def get(self, featureset_name):
         fs = self.fss.get(featureset_name)
-        if not fs:
+        # If fs.table is None it has probably been closed
+        if not fs or not fs.table:
             fs = FeatureTable(
                 self.session, featureset_name, self.ft_space, self.ann_space)
             # raises NoTableMatchException if not found

@@ -760,9 +760,10 @@ class TestFeatureTableManager(object):
 
         self.mox.VerifyAll()
 
-    @pytest.mark.parametrize('opened', [True, False])
-    def test_get(self, opened):
+    @pytest.mark.parametrize('state', ['opened', 'unopened', 'closed'])
+    def test_get(self, state):
         fs = MockFeatureTable(None)
+        fs.table = object()
         self.mox.StubOutWithMock(OmeroTablesFeatureStore, 'FeatureTable')
         fsname = 'fsname'
         fts = OmeroTablesFeatureStore.FeatureTableManager(None, namespace='x')
@@ -770,13 +771,18 @@ class TestFeatureTableManager(object):
         self.mox.StubOutWithMock(fts.fss, 'get')
         self.mox.StubOutWithMock(fts.fss, 'insert')
 
-        if opened:
+        if state == 'opened':
             fts.fss.get(fsname).AndReturn(fs)
         else:
-            fts.fss.get(fsname).AndReturn(None)
+            if state == 'unopened':
+                fts.fss.get(fsname).AndReturn(None)
+            if state == 'closed':
+                fsold = MockFeatureTable(None)
+                fts.fss.get(fsname).AndReturn(fsold)
             OmeroTablesFeatureStore.FeatureTable(
                 None, fsname, 'x/features', 'x/source').AndReturn(fs)
             fts.fss.insert(fsname, fs)
+
         self.mox.ReplayAll()
 
         assert fts.get(fsname) == fs
