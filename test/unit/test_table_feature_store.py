@@ -450,32 +450,62 @@ class TestFeatureTable(object):
         store.store('Image', ids, valuess)
         self.mox.VerifyAll()
 
-    def test_fetch_by_image(self):
+    @pytest.mark.parametrize('last', [True, False])
+    def test_fetch_by_image(self, last):
         store = MockFeatureTable(None)
         self.mox.StubOutWithMock(store, 'fetch_by_object')
         self.mox.StubOutWithMock(store, 'feature_row')
-        values = (1, 0, [5])
-        r = object()
+        values1 = (1, 0, [5])
+        values21 = (2, 0, [6])
+        values22 = (2, 0, [7])
+        r1 = object()
+        r2 = object()
 
-        store.fetch_by_object('Image', 1).AndReturn([values])
-        store.feature_row(values).AndReturn(r)
+        store.fetch_by_object('Image', 1).AndReturn([values1])
+        store.feature_row(values1).AndReturn(r1)
+
+        store.fetch_by_object('Image', 2).AndReturn([values21, values22])
+        if last:
+            store.feature_row(values22).AndReturn(r2)
 
         self.mox.ReplayAll()
-        assert store.fetch_by_image(1) == r
+
+        assert store.fetch_by_image(1) == r1
+        if last:
+            assert store.fetch_by_image(2, last) == r2
+        else:
+            with pytest.raises(OmeroTablesFeatureStore.TableUsageException):
+                store.fetch_by_image(2, last)
+
         self.mox.VerifyAll()
 
-    def test_fetch_by_roi(self):
+    @pytest.mark.parametrize('last', [True, False])
+    def test_fetch_by_roi(self, last):
         store = MockFeatureTable(None)
         self.mox.StubOutWithMock(store, 'fetch_by_object')
         self.mox.StubOutWithMock(store, 'feature_row')
-        values = (1, 0, [5])
-        r = object()
+        values1 = (0, 1, [5])
+        values21 = (0, 2, [6])
+        values22 = (0, 2, [7])
+        r1 = object()
+        r2 = object()
 
-        store.fetch_by_object('Roi', 1).AndReturn([values])
-        store.feature_row(values).AndReturn(r)
+        store.fetch_by_object('Roi', 1).AndReturn([values1])
+        store.feature_row(values1).AndReturn(r1)
+
+        store.fetch_by_object('Roi', 2).AndReturn([values21, values22])
+        if last:
+            store.feature_row(values22).AndReturn(r2)
 
         self.mox.ReplayAll()
-        assert store.fetch_by_roi(1) == r
+
+        assert store.fetch_by_roi(1) == r1
+        if last:
+            assert store.fetch_by_roi(2, last) == r2
+        else:
+            with pytest.raises(OmeroTablesFeatureStore.TableUsageException):
+                store.fetch_by_roi(2, last)
+
         self.mox.VerifyAll()
 
     def test_fetch_all(self):

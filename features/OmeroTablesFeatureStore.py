@@ -326,19 +326,19 @@ class FeatureTable(AbstractFeatureStore):
         for (object_id, values) in itertools.izip(object_ids, valuess):
             self.store_by_object(object_type, object_id, values)
 
-    def fetch_by_image(self, image_id):
+    def fetch_by_image(self, image_id, last=False):
         values = self.fetch_by_object('Image', image_id)
-        if len(values) > 1:
+        if len(values) > 1 and not last:
             raise TableUsageException(
                 'Multiple feature rows found for Image %d' % image_id)
-        return self.feature_row(values[0])
+        return self.feature_row(values[-1])
 
-    def fetch_by_roi(self, roi_id):
+    def fetch_by_roi(self, roi_id, last=False):
         values = self.fetch_by_object('Roi', roi_id)
-        if len(values) > 1:
+        if len(values) > 1 and not last:
             raise TableUsageException(
                 'Multiple feature rows found for Roi %d' % roi_id)
-        return self.feature_row(values[0])
+        return self.feature_row(values[-1])
 
     def fetch_all(self, image_id):
         values = self.fetch_by_object('Image', image_id)
