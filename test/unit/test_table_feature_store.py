@@ -259,19 +259,19 @@ class TestFeatureRow(object):
         with pytest.raises(OmeroTablesFeatureStore.FeatureRowException):
             fr['b'] = [0]
 
-    def test_metavalues(self):
+    def test_infovalues(self):
         fr = OmeroTablesFeatureStore.FeatureRow(
-            names=['a', 'b'], widths=[1, 2], metanames=['ma', 'mb'])
+            names=['a', 'b'], widths=[1, 2], infonames=['ma', 'mb'])
 
         with pytest.raises(OmeroTablesFeatureStore.FeatureRowException):
-            fr.metavalues = ['va']
-        fr.metavalues = ['x', 'y']
+            fr.infovalues = ['va']
+        fr.infovalues = ['x', 'y']
 
         assert fr._get_index('ma') == (0, True)
         assert fr._get_index('mb') == (1, True)
 
         fr['ma'] = 'z'
-        assert fr.metavalues == ['z', 'y']
+        assert fr.infovalues == ['z', 'y']
 
 
 class TestFeatureTable(object):
@@ -548,8 +548,8 @@ class TestFeatureTable(object):
         assert rv.names == ['a', 'b']
         assert rv.widths == [1, 2]
         assert rv.values == row[2:]
-        assert rv.metanames == ['ma', 'mb']
-        assert rv.metavalues == [10, 20]
+        assert rv.infonames == ['ma', 'mb']
+        assert rv.infovalues == [10, 20]
         self.mox.VerifyAll()
 
     def test_get_chunk_size(self):
