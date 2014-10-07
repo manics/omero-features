@@ -24,87 +24,47 @@ import sys
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
 import numpy
-from itertools import product
-from features.storage import Storage
+import features
 
-#size = (2, 3, 4)
-size = (3, )
-filename = 'test.h5'
+# Note the OMERO client variable must exists (for instance run this script
+# from inside `bin/omero shell --login`)
 
-def test_desc_str():
-    d = {'as_ds':'345', 'bb':'^^^\\', '_==c\_':'43'}
-    s = Storage.desc_to_str(d)
-    sd = Storage.str_to_desc(s)
-    assert d == sd
+# 10 features within this featureset, each feature is a fixed-width vector
+# (but each feature can be a different width)
+featureset_name = 'Test Featureset'
+feature_names = ['x%04d' % n for n in xrange(10)]
+feature_widths = range(1, 11)
 
-def example_create():
-    with Storage(filename, 'w') as s:
-        #rowdesc = {'type': str, 'id': int, 'c': int, 'z': int, 't': int}
-        rowdesc = [
-            ('type', str), ('id', int), ('c', int), ('z', int), ('t', int)
-            ]
-        featuredesc = {'name': 'Test Featureset', 'version': '0.1.0'}
-        s.newFeatureGroup(rowdesc, size, featuredesc)
+manager = features.OmeroTablesFeatureStore.FeatureTableManager(
+    client.getSession())
 
-def example_write():
-    with Storage(filename, 'a') as s:
-        iczts = product(xrange(4), xrange(3), xrange(2), xrange(2))
-        for i, c, z, t in iczts:
-            #values = numpy.random.rand(*size)
-            values = numpy.array(range(numpy.prod(size))).reshape(size) + i
-            s.store1(
-                {'type': 'Object', 'id': i, 'c': c, 'z': z, 't': t}, values)
+# Create a new featureset (name must be unique within this group)
+manager.create(featureset_name, feature_names, feature_widths)
 
-def example_read():
-    with Storage(filename, 'r') as s:
-        print s.feature_desc()
-        # Queries: lists elements are ORed, dict fields are ANDed
-        x = s.fetch([{'c': 1, 'id': 0}, {'c': 2, 'id': [1, 2]}])
-    return x
+# Retrieve an existing featureset
+fs = manager.get(featureset_name)
 
-def example():
-    example_create()
-    example_write()
-    print example_read()
+# Store some features associated with an image. This will automatically create
+# an annotation on the image linking it to the underlying table file
+imageid = 3889L
 
+values = tuple(numpy.random.rand(n) for n in feature_widths)
+fs.store_by_image(imageid, values)
 
+# Retrieve the features
+r = fs.fetch_by_image(imageid)
+# If multiple matching rows are found this will throw an exception, pass
+# last=True to return just the last matching row
+r = fs.fetch_by_image(imageid, last=True)
 
-bigsize = 1000
+# Feature metadata (currently just Image/Roi IDs):
+print '\n'.join('%s=%s' % kv for kv in zip(r.infonames, r.infovalues))
 
-def big_create():
-    with Storage(filename, 'w') as s:
-        rowdesc = [
-            ('type', str), ('id', int), ('c', int), ('z', int), ('t', int)]
-        featuredesc = {'name': 'Test Big Featureset', 'version': '0.1.0'}
-        s.newFeatureGroup(rowdesc, bigsize, featuredesc)
+# Feature names and values
+print '\n'.join('%s=%s' % kv for kv in zip(r.names, r.values))
 
-def big_write():
-    with Storage(filename, 'a') as s:
-        iczts = product(xrange(2000), xrange(4), xrange(5), xrange(6))
-        for i, c, z, t in iczts:
-            #values = numpy.random.rand(*size)
-            values = numpy.array(range(numpy.prod(bigsize))).reshape(bigsize) + i
-            s.store1(
-                {'type': 'Object', 'id': i, 'c': c, 'z': z, 't': t}, values)
+# Delete the entire featureset and annotations (may be very slow)
+fs.delete()
 
-def big_create_indices():
-    with Storage(filename, 'a') as s:
-        s.create_indices()
-
-def big_read1():
-    with Storage(filename, 'r') as s:
-        print s.feature_desc()
-        x = s.fetch([
-            {'c': 1, 'id': range(0, 2000, 20)},
-            {'c': 2, 'id': range(5, 2000, 20)}
-            ])
-    return x
-
-def big_read2():
-    with Storage(filename, 'r') as s:
-        print s.feature_desc()
-        x = s.fetch([
-            {'c': 1, 'z': [0, 2, 4], 't': [0, 2, 4]},
-            {'c': 2, 'z': [1, 3], 't': [1, 3, 5]}
-            ])
-    return x
+# Close all tables
+manager.close()
