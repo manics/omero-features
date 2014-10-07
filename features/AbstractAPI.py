@@ -36,7 +36,7 @@ class AbstractFeatureRow(object):
     __metaclass__ = ABCMeta
 
     def __init__(self, widths=None, names=None, values=None,
-            infonames=None, infovalues=None):
+                 infonames=None, infovalues=None):
         self._widths = widths
         self._names = names
         self._values = values

@@ -83,7 +83,7 @@ class FeatureRowException(TableStoreException):
 class FeatureRow(AbstractFeatureRow):
 
     def __init__(self, widths=None, names=None, values=None,
-            infonames=None, infovalues=None):
+                 infonames=None, infovalues=None):
         if not widths and not values:
             raise FeatureRowException(
                 'At least one of widths or values must be provided')
