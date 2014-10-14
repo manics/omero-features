@@ -59,9 +59,8 @@ class UserAccount(object):
         # Create group if necessary
         if not group:
             g = self.new_group(perms=perms)
-            group = g.name.val
         else:
-            g, group = self.group_and_name(group)
+            g = group
 
         # Create user
         e = omero.model.ExperimenterI()

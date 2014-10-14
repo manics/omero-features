@@ -73,6 +73,13 @@ class TableUsageException(TableStoreException):
     pass
 
 
+class FeaturePermissionException(TableStoreException):
+    """
+    Client does not have permission to access a feature table
+    """
+    pass
+
+
 class FeatureRowException(TableStoreException):
     """
     Errors in a FeatureRow object
@@ -203,6 +210,27 @@ class FeatureRow(AbstractFeatureRow):
              self._infonames, self._infovalues))
 
 
+class PermissionsHandler(object):
+    """
+    Handles permissions checks on objects handled by OMERO.features.
+
+    These are stricter than the OMERO model: only owners are allowed to
+    write or edit objects. Annotation permissions are as standard.
+    """
+
+    def __init__(self, session):
+        self.context = session.getAdminService().getEventContext()
+
+    def can_annotate(self, obj):
+        p = obj.getDetails().getPermissions()
+        return p.canAnnotate()
+
+    def can_edit(self, obj):
+        d = obj.getDetails()
+        return (self.context.userId == unwrap(d.getOwner().id) and
+                d.getPermissions().canEdit())
+
+
 class FeatureTable(AbstractFeatureStore):
     """
     A feature store.
@@ -211,6 +239,7 @@ class FeatureTable(AbstractFeatureStore):
 
     def __init__(self, session, name, ft_space, ann_space, coldesc=None):
         self.session = session
+        self.perms = PermissionsHandler(session)
         self.name = name
         self.ft_space = ft_space
         self.ann_space = ann_space
@@ -218,6 +247,15 @@ class FeatureTable(AbstractFeatureStore):
         self.table = None
         self.chunk_size = None
         self.get_table(coldesc)
+
+    def _owns_table(func):
+        def assert_owns_table(*args, **kwargs):
+            self = args[0]
+            if not self.perms.can_edit(self.table.getOriginalFile()):
+                raise FeaturePermissionException(
+                    'Feature table must be owned by the current user')
+            return func(*args, **kwargs)
+        return assert_owns_table
 
     def close(self):
         if self.table:
@@ -304,6 +342,7 @@ class FeatureTable(AbstractFeatureStore):
     def store_by_roi(self, roi_id, values):
         self.store_by_object('Roi', roi_id, values)
 
+    @_owns_table
     def store_by_object(self, object_type, object_id, values):
         if object_type == 'Image':
             self.cols[0].values = [object_id]
@@ -431,6 +470,7 @@ class FeatureTable(AbstractFeatureStore):
         link = self.session.getUpdateService().saveAndReturnObject(link)
         return link
 
+    @_owns_table
     def delete(self):
         # There's a bug (?) which means multiple FileAnnotations with the same
         # OriginalFile child can't be deleted using the graph spec methods.

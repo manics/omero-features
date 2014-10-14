@@ -204,9 +204,21 @@ class MockTable:
         pass
 
 
+class MockPermissionsHandler:
+    def __init__(self):
+        pass
+
+    def can_annotate(self, obj):
+        pass
+
+    def can_edit(self, obj):
+        pass
+
+
 class MockFeatureTable(OmeroTablesFeatureStore.FeatureTable):
     def __init__(self, session):
         self.session = session
+        self.perms = None
         self.name = 'table-name'
         self.ft_space = '/test/features/ft_space'
         self.ann_space = '/test/features/ann_space'
@@ -414,13 +426,17 @@ class TestFeatureTable(object):
         store.store_by_roi(12, values)
         self.mox.VerifyAll()
 
-    def test_store_by_object(self):
+    @pytest.mark.parametrize('owned', [True, False])
+    def test_store_by_object(self, owned):
+        perms = self.mox.CreateMock(MockPermissionsHandler)
         table = self.mox.CreateMock(MockTable)
         store = MockFeatureTable(None)
+        store.perms = perms
         store.table = table
         store.cols = [MockColumn('a'), MockColumn('b'),
                       MockColumn('c', None, 1), MockColumn('d', None, 2)]
 
+        self.mox.StubOutWithMock(perms, 'can_edit')
         self.mox.StubOutWithMock(table, 'addData')
         self.mox.StubOutWithMock(table, 'getOriginalFile')
         self.mox.StubOutWithMock(store, 'create_file_annotation')
@@ -430,12 +446,22 @@ class TestFeatureTable(object):
         cols = [MockColumn('a', [12]), MockColumn('b', [0]),
                 MockColumn('c', [[10]], 1), MockColumn('d', [[20, 30]], 2)]
 
-        table.addData(cols)
         table.getOriginalFile().AndReturn(mf)
-        store.create_file_annotation('Image', 12, store.ann_space, mf)
+        perms.can_edit(mf).AndReturn(owned)
+        if owned:
+            table.addData(cols)
+            table.getOriginalFile().AndReturn(mf)
+            store.create_file_annotation('Image', 12, store.ann_space, mf)
+
         self.mox.ReplayAll()
 
-        store.store_by_object('Image', 12, values)
+        if owned:
+            store.store_by_object('Image', 12, values)
+        else:
+            with pytest.raises(
+                    OmeroTablesFeatureStore.FeaturePermissionException):
+                store.store_by_object('Image', 12, values)
+
         self.mox.VerifyAll()
 
     def test_store(self):
@@ -663,12 +689,15 @@ class TestFeatureTable(object):
         self.mox.VerifyAll()
 
     def test_delete(self):
+        perms = self.mox.CreateMock(MockPermissionsHandler)
         table = self.mox.CreateMock(MockTable)
         session = MockSession(1, table)
         store = MockFeatureTable(session)
+        store.perms = perms
         store.table = table
 
         self.mox.StubOutWithMock(store, 'close')
+        self.mox.StubOutWithMock(perms, 'can_edit')
         self.mox.StubOutWithMock(table, 'getOriginalFile')
         self.mox.StubOutWithMock(store, '_get_annotation_link_types')
         self.mox.StubOutWithMock(session.qs, 'findAllByQuery')
@@ -676,6 +705,8 @@ class TestFeatureTable(object):
 
         fid = 123
         mf = MockOriginalFile(fid, 'table-name', store.ft_space)
+        table.getOriginalFile().AndReturn(mf)
+        perms.can_edit(mf).AndReturn(True)
         table.getOriginalFile().AndReturn(mf)
 
         store._get_annotation_link_types().AndReturn(
