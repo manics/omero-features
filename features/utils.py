@@ -65,7 +65,7 @@ def create_roi_for_plane(session, iid, z, c, t):
 
 def find_rois_for_plane(session, iid=None, z=None, c=None, t=None,
                         chname=None, shapetype=None, fullplane=True,
-                        singleshape=True, projection=False,
+                        singleshape=True, projection=True,
                         load_shapes=False, load_image=False, load_pixels=False,
                         load_channels=False):
     """
