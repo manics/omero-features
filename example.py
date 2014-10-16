@@ -21,7 +21,7 @@
 
 import os
 import sys
-sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+sys.path.append(os.getcwd())
 
 import numpy
 import features
@@ -62,6 +62,13 @@ print '\n'.join('%s=%s' % kv for kv in zip(r.infonames, r.infovalues))
 
 # Feature names and values
 print '\n'.join('%s=%s' % kv for kv in zip(r.names, r.values))
+
+# Store some features for z single Z/C/T plane by creating a ROI
+z, c, t = 0, 0, 0
+roiid = features.utils.create_roi_for_plane(
+    client.getSession(), imageid, z, c, t)
+values = tuple(numpy.random.rand(n) for n in feature_widths)
+fs.store_by_roi(roiid, values)
 
 # Delete the entire featureset and annotations (may be very slow)
 fs.delete()
