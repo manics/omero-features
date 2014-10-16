@@ -1,3 +1,3 @@
 import OmeroTablesFeatureStore
 
-__all__ = ['OmeroTablesFeatureStore']
+__all__ = ['OmeroTablesFeatureStore', 'utils']
