@@ -27,14 +27,14 @@ import omero
 from omero.rtypes import rdouble, rint, rstring, unwrap
 
 
-def create_roi_for_plane(session, iid, c, z, t):
+def create_roi_for_plane(session, iid, z, c, t):
     """
     Create a ROI consisting of an entire single plane
 
     :param session: An active session
     :param iid: Image ID
-    :param c: C index
     :param z: Z index
+    :param c: C index
     :param t: T index
     :return: The new ROI
     """
@@ -51,8 +51,8 @@ def create_roi_for_plane(session, iid, c, z, t):
     rect.setY(rdouble(0))
     rect.setWidth(rdouble(px.getSizeX().val))
     rect.setHeight(rdouble(px.getSizeY().val))
-    rect.setTheC(rint(c))
     rect.setTheZ(rint(z))
+    rect.setTheC(rint(c))
     rect.setTheT(rint(t))
 
     roi = omero.model.RoiI()
@@ -63,7 +63,7 @@ def create_roi_for_plane(session, iid, c, z, t):
     return roi
 
 
-def find_rois_for_plane(session, iid=None, c=None, z=None, t=None,
+def find_rois_for_plane(session, iid=None, z=None, c=None, t=None,
                         chname=None, shapetype=None, fullplane=True,
                         singleshape=True, projection=False,
                         load_shapes=False, load_image=False, load_pixels=False,
@@ -73,8 +73,8 @@ def find_rois_for_plane(session, iid=None, c=None, z=None, t=None,
 
     :param session: An active session
     :param iid: Image ID
-    :param c: C index
     :param z: Z index
+    :param c: C index
     :param t: T index
     :param chname: Channel name
     :param shapetype: The ROI Shape type
@@ -101,14 +101,14 @@ def find_rois_for_plane(session, iid=None, c=None, z=None, t=None,
         conds.append('i.id=:iid')
         params.addLong('iid', iid)
 
-    if c is not None:
-        load_shapes = True
-        conds.append('s.theC=:c')
-        params.add('c', rint(c))
     if z is not None:
         load_shapes = True
         conds.append('s.theZ=:z')
         params.add('z', rint(z))
+    if c is not None:
+        load_shapes = True
+        conds.append('s.theC=:c')
+        params.add('c', rint(c))
     if t is not None:
         load_shapes = True
         conds.append('s.theT=:t')

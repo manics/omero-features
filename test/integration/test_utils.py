@@ -72,8 +72,8 @@ class TestUtils(object):
         assert unwrap(s.getY()) == 0
         assert unwrap(s.getWidth()) == 4
         assert unwrap(s.getHeight()) == 5
-        assert unwrap(s.getTheC()) == 2
-        assert unwrap(s.getTheZ()) == 4
+        assert unwrap(s.getTheZ()) == 2
+        assert unwrap(s.getTheC()) == 4
         assert unwrap(s.getTheT()) == 6
 
     @pytest.mark.parametrize('projection', [True, False])
@@ -113,6 +113,6 @@ class TestUtils(object):
         assert getIds(rs, not projection) == getIds([r1, r2, r3])
 
         rs = utils.find_rois_for_plane(
-            self.sess, iid=iid, z=4, fullplane=False, singleshape=False,
+            self.sess, iid=iid, c=4, fullplane=False, singleshape=False,
             projection=projection)
         assert getIds(rs, not projection) == getIds([r2, r3, r4])
