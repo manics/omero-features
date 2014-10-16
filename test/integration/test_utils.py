@@ -60,10 +60,18 @@ class TestUtils(object):
         im = conn.createImageFromNumpySeq(planegen(), __name__, szz, szc, szt)
         return im._obj
 
-    def test_create_roi_for_plane(self):
+    @pytest.mark.parametrize('robject', [True, False])
+    def test_create_roi_for_plane(self, robject):
         im = self.create_image()
 
-        r = utils.create_roi_for_plane(self.sess, unwrap(im.getId()), 2, 4, 6)
+        r = utils.create_roi_for_plane(
+            self.sess, unwrap(im.getId()), 2, 4, 6, robject=robject)
+        if not robject:
+            p = omero.sys.ParametersI()
+            p.addId(r)
+            r = self.sess.getQueryService().findByQuery(
+                'FROM Roi r JOIN FETCH r.shapes where r.id=:id', p)
+
         assert r.getImage().getId() == im.getId()
         assert r.sizeOfShapes() == 1
 
@@ -86,14 +94,18 @@ class TestUtils(object):
         im = self.create_image()
         iid = unwrap(im.getId())
 
-        r1 = utils.create_roi_for_plane(self.sess, unwrap(im.getId()), 2, 3, 4)
-        r2 = utils.create_roi_for_plane(self.sess, unwrap(im.getId()), 2, 4, 6)
+        r1 = utils.create_roi_for_plane(
+            self.sess, unwrap(im.getId()), 2, 3, 4, robject=True)
+        r2 = utils.create_roi_for_plane(
+            self.sess, unwrap(im.getId()), 2, 4, 6, robject=True)
 
-        r3 = utils.create_roi_for_plane(self.sess, unwrap(im.getId()), 2, 4, 8)
+        r3 = utils.create_roi_for_plane(
+            self.sess, unwrap(im.getId()), 2, 4, 8, robject=True)
         r3.getShape(0).setWidth(rdouble(1))
         r3 = self.sess.getUpdateService().saveAndReturnObject(r3)
 
-        r4 = utils.create_roi_for_plane(self.sess, unwrap(im.getId()), 2, 4, 8)
+        r4 = utils.create_roi_for_plane(
+            self.sess, unwrap(im.getId()), 2, 4, 8, robject=True)
         r4.addShape(omero.model.RectI())
         r4 = self.sess.getUpdateService().saveAndReturnObject(r4)
 

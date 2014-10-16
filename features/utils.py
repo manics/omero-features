@@ -27,7 +27,7 @@ import omero
 from omero.rtypes import rdouble, rint, rstring, unwrap
 
 
-def create_roi_for_plane(session, iid, z, c, t):
+def create_roi_for_plane(session, iid, z, c, t, robject=False):
     """
     Create a ROI consisting of an entire single plane
 
@@ -36,6 +36,7 @@ def create_roi_for_plane(session, iid, z, c, t):
     :param z: Z index
     :param c: C index
     :param t: T index
+    :param robject: If true return the ROI object, default is to return the ID
     :return: The new ROI
     """
     qs = session.getQueryService()
@@ -60,7 +61,9 @@ def create_roi_for_plane(session, iid, z, c, t):
     roi.setImage(im)
 
     roi = us.saveAndReturnObject(roi)
-    return roi
+    if robject:
+        return roi
+    return roi.getId().val
 
 
 def find_rois_for_plane(session, iid=None, z=None, c=None, t=None,
