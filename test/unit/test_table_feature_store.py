@@ -232,48 +232,44 @@ class TestFeatureRow(object):
 
     def test_init(self):
         with pytest.raises(OmeroTablesFeatureStore.FeatureRowException):
-            OmeroTablesFeatureStore.FeatureRow(names=['a'], values=[[1], [2]])
-        with pytest.raises(OmeroTablesFeatureStore.FeatureRowException):
-            OmeroTablesFeatureStore.FeatureRow(names=['a'], widths=[1, 1])
-        with pytest.raises(OmeroTablesFeatureStore.FeatureRowException):
-            OmeroTablesFeatureStore.FeatureRow(widths=[1], values=[[1, 2]])
+            OmeroTablesFeatureStore.FeatureRow(names=['a'], values=[1, 2])
 
         fr = OmeroTablesFeatureStore.FeatureRow(
-            names=['a', 'b'], values=[[1], [2, 3]])
+            names=['a', 'b'], values=[1, 2])
         assert fr.names == ['a', 'b']
-        assert fr.widths == [1, 2]
-        assert fr.values == [[1], [2, 3]]
+        assert fr.values == [1, 2]
 
-        fr = OmeroTablesFeatureStore.FeatureRow(
-            names=['a', 'b'], widths=[1, 2])
+        fr = OmeroTablesFeatureStore.FeatureRow(names=['a', 'b'])
         assert fr.names == ['a', 'b']
-        assert fr.widths == [1, 2]
         assert fr.values is None
 
     def test_values(self):
-        fr = OmeroTablesFeatureStore.FeatureRow(
-            names=['a', 'b'], widths=[1, 2])
+        fr = OmeroTablesFeatureStore.FeatureRow(names=['a', 'b'])
 
-        fr.values = [[1], [2, 3]]
-        assert fr.values == [[1], [2, 3]]
+        fr.values = [1, 2]
+        assert fr.values == [1, 2]
 
         with pytest.raises(OmeroTablesFeatureStore.FeatureRowException):
-            fr.values = [[0], [0]]
+            fr.values = [0, 0, 0]
 
         assert fr._get_index('a') == (0, False)
         assert fr._get_index('b') == (1, False)
-        assert fr['a'] == [1]
-        assert fr['b'] == [2, 3]
+        assert fr['a'] == 1
+        assert fr['b'] == 2
 
-        fr['a'] = [10]
-        assert fr.values == [[10], [2, 3]]
+        fr['a'] = 10
+        assert fr.values == [10, 2]
 
+        with pytest.raises(KeyError):
+            fr['c'] = [0]
+
+        fr = OmeroTablesFeatureStore.FeatureRow(values=[1, 2])
         with pytest.raises(OmeroTablesFeatureStore.FeatureRowException):
-            fr['b'] = [0]
+            fr.values = [0, 0, 0]
 
     def test_infovalues(self):
         fr = OmeroTablesFeatureStore.FeatureRow(
-            names=['a', 'b'], widths=[1, 2], infonames=['ma', 'mb'])
+            names=['a', 'b'], infonames=['ma', 'mb'])
 
         with pytest.raises(OmeroTablesFeatureStore.FeatureRowException):
             fr.infovalues = ['va']
@@ -284,6 +280,12 @@ class TestFeatureRow(object):
 
         fr['ma'] = 'z'
         assert fr.infovalues == ['z', 'y']
+
+    def test_repr(self):
+        fr = OmeroTablesFeatureStore.FeatureRow(
+            names=['a'], values=[1], infonames=['ma'], infovalues=[0])
+        assert repr(fr) == ("FeatureRow(names=['a'], values=[1], "
+                            "infonames=['ma'], infovalues=[0])")
 
 
 class TestFeatureTable(object):

@@ -89,16 +89,15 @@ class FeatureRowException(TableStoreException):
 
 class FeatureRow(AbstractFeatureRow):
 
-    def __init__(self, widths=None, names=None, values=None,
+    def __init__(self, names=None, values=None,
                  infonames=None, infovalues=None):
-        if not widths and not values:
+        if not names and not values:
             raise FeatureRowException(
-                'At least one of widths or values must be provided')
+                'At least one of names or values must be provided')
 
-        self._widths = widths
-        if names and widths and len(names) != len(widths):
+        if names and values and len(names) != len(values):
             raise FeatureRowException(
-                'names and widths must have the same number of elements')
+                'names and values must have the same number of elements')
         self._names = names
 
         self._values = None
@@ -144,10 +143,6 @@ class FeatureRow(AbstractFeatureRow):
         i, m = self._get_index(key)
         if m:
             self.infovalues[i] = value
-        elif len(value) != self._widths[i]:
-            raise FeatureRowException(
-                'Expected array of length %d, received %d' % (
-                    len(value), self._widths[i]))
         else:
             self.values[i] = value
 
@@ -156,27 +151,20 @@ class FeatureRow(AbstractFeatureRow):
         return self._names
 
     @property
-    def widths(self):
-        return self._widths
-
-    @property
     def values(self):
         return self._values
 
     @values.setter
     def values(self, value):
-        if self._names and len(self._names) != len(value):
-            raise FeatureRowException(
-                'Expected %d elements, received %d' % (
-                    len(self._names), len(value)))
-        widths = [len(v) for v in value]
-        if self._widths:
-            if self._widths != widths:
-                raise FeatureRowException(
-                    'Expected elements with widths %s, received %s' % (
-                        self._widths, widths))
+        if self._names:
+            w = len(self._names)
+        elif self._values:
+            w = len(self._values)
         else:
-            self._widths = widths
+            w = len(value)
+        if len(value) != w:
+            raise FeatureRowException(
+                'Expected %d elements, received %d' % (w, len(value)))
         self._values = value
 
     @values.deleter
@@ -205,8 +193,8 @@ class FeatureRow(AbstractFeatureRow):
 
     def __repr__(self):
         return (
-            '%s(widths=%r, names=%r, values=%r, infonames=%r, infovalues=%r)' %
-            (self.__class__.__name__, self._widths, self._names, self._values,
+            '%s(names=%r, values=%r, infonames=%r, infovalues=%r)' %
+            (self.__class__.__name__, self._names, self._values,
              self._infonames, self._infovalues))
 
 
