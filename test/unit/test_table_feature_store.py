@@ -185,6 +185,9 @@ class MockTable:
     def close(self):
         pass
 
+    def getAllMetadata(self):
+        pass
+
     def getHeaders(self):
         pass
 
@@ -201,6 +204,9 @@ class MockTable:
         pass
 
     def readCoordinates(self):
+        pass
+
+    def setMetadata(self, k, v):
         pass
 
 
@@ -224,6 +230,7 @@ class MockFeatureTable(OmeroTablesFeatureStore.FeatureTable):
         self.ann_space = '/test/features/ann_space'
         self.cols = None
         self.table = None
+        self.ftnames = None
         self.header = None
         self.chunk_size = None
 
@@ -325,7 +332,7 @@ class TestFeatureTable(object):
         self.mox.StubOutWithMock(store, 'new_table')
         table = self.mox.CreateMock(MockTable)
 
-        col_desc = [('x', 1)]
+        col_desc = ['x']
         filedesc = {'name': 'table-name', 'path': store.ft_space}
 
         if opened:
@@ -377,14 +384,14 @@ class TestFeatureTable(object):
         tcols = [
             omero.grid.ImageColumn('ImageID', ''),
             omero.grid.RoiColumn('RoiID', ''),
-            omero.grid.DoubleArrayColumn('x', '', 1),
+            omero.grid.DoubleArrayColumn('Features', '', 1),
         ]
+        desc = ['x']
+
         table.initialize(mox.Func(lambda xs: comparecols(xs, tcols)))
+        table.setMetadata('0', wrap(desc[0]))
         table.getHeaders().AndReturn(tcols)
 
-        desc = [
-            ('x', 1),
-        ]
 
         self.mox.ReplayAll()
 
@@ -408,10 +415,23 @@ class TestFeatureTable(object):
         assert store.cols == cols
         self.mox.VerifyAll()
 
+    def test_feature_names(self):
+        table = self.mox.CreateMock(MockTable)
+        store = MockFeatureTable(None)
+        store.table = table
+        store.cols = [MockColumn(), MockColumn(), MockColumn(size=2)]
+
+        self.mox.StubOutWithMock(table, 'getAllMetadata')
+        table.getAllMetadata().AndReturn({'0': 'a', '1': 'b', 'other': 'x'})
+
+        self.mox.ReplayAll()
+        assert store.feature_names() == ['a', 'b']
+        self.mox.VerifyAll()
+
     def test_store_by_image(self):
         store = MockFeatureTable(None)
         self.mox.StubOutWithMock(store, 'store_by_object')
-        values = [[34]]
+        values = [34]
         store.store_by_object('Image', 12, values)
 
         self.mox.ReplayAll()
@@ -421,7 +441,7 @@ class TestFeatureTable(object):
     def test_store_by_roi(self):
         store = MockFeatureTable(None)
         self.mox.StubOutWithMock(store, 'store_by_object')
-        values = [[34]]
+        values = [34]
         store.store_by_object('Roi', 12, values)
 
         self.mox.ReplayAll()
@@ -436,7 +456,7 @@ class TestFeatureTable(object):
         store.perms = perms
         store.table = table
         store.cols = [MockColumn('a'), MockColumn('b'),
-                      MockColumn('c', None, 1), MockColumn('d', None, 2)]
+                      MockColumn('c', None, 2)]
 
         self.mox.StubOutWithMock(perms, 'can_edit')
         self.mox.StubOutWithMock(table, 'addData')
@@ -444,9 +464,9 @@ class TestFeatureTable(object):
         self.mox.StubOutWithMock(store, 'create_file_annotation')
 
         mf = MockOriginalFile(3)
-        values = [[10], [20, 30]]
+        values = [10, 20]
         cols = [MockColumn('a', [12]), MockColumn('b', [0]),
-                MockColumn('c', [[10]], 1), MockColumn('d', [[20, 30]], 2)]
+                MockColumn('c', [10, 20], 2)]
 
         table.getOriginalFile().AndReturn(mf)
         perms.can_edit(mf).AndReturn(owned)
@@ -470,9 +490,9 @@ class TestFeatureTable(object):
         store = MockFeatureTable(None)
         self.mox.StubOutWithMock(store, 'store_by_object')
         ids = [1, 2]
-        valuess = [[[34]], [[56]]]
-        store.store_by_object('Image', 1, [[34]])
-        store.store_by_object('Image', 2, [[56]])
+        valuess = [[34], [56]]
+        store.store_by_object('Image', 1, [34])
+        store.store_by_object('Image', 2, [56])
 
         self.mox.ReplayAll()
         store.store('Image', ids, valuess)
@@ -598,14 +618,15 @@ class TestFeatureTable(object):
     def test_feature_row(self):
         store = MockFeatureTable(None)
         store.cols = [MockColumn('ma'), MockColumn('mb'),
-                      MockColumn('a'), MockColumn('b')]
-        row = [10, 20, [1], [2, 3]]
+                      MockColumn('f')]
+        self.mox.StubOutWithMock(store, 'feature_names')
+        store.feature_names().AndReturn(['a', 'b'])
+        row = [10, 20, [1, 2]]
 
         self.mox.ReplayAll()
         rv = store.feature_row(row)
         assert rv.names == ['a', 'b']
-        assert rv.widths == [1, 2]
-        assert rv.values == row[2:]
+        assert rv.values == [1, 2]
         assert rv.infonames == ['ma', 'mb']
         assert rv.infovalues == [10, 20]
         self.mox.VerifyAll()

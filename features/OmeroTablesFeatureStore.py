@@ -233,6 +233,7 @@ class FeatureTable(AbstractFeatureStore):
         self.ann_space = ann_space
         self.cols = None
         self.table = None
+        self.ftnames = None
         self.chunk_size = None
         self.get_table(coldesc)
 
@@ -249,6 +250,8 @@ class FeatureTable(AbstractFeatureStore):
         if self.table:
             self.table.close()
             self.table = None
+            self.cols = None
+            self.ftnames = None
 
     def get_table(self, coldesc=None):
         tablepath = self.ft_space + '/' + self.name
@@ -305,10 +308,16 @@ class FeatureTable(AbstractFeatureStore):
             omero.grid.ImageColumn('ImageID', ''),
             omero.grid.RoiColumn('RoiID', '')
         ]
-        for name, width in coldesc:
-            coldef.append(omero.grid.DoubleArrayColumn(name, '', width))
+        coldef.append(omero.grid.DoubleArrayColumn(
+            'Features', '', len(coldesc)))
 
         self.table.initialize(coldef)
+        # setAllMetadata is currently broken:
+        # https://trac.openmicroscopy.org.uk/ome/ticket/12606
+        # colnames = dict((str(n): coldesc[n]) for n in xrange(len(coldesc)))
+        # self.table.setAllMetadata(colnames)
+        for n in xrange(len(coldesc)):
+            self.table.setMetadata(str(n), wrap(coldesc[n]))
         self.cols = self.table.getHeaders()
         if not self.cols:
             raise OmeroTableException(
@@ -323,6 +332,13 @@ class FeatureTable(AbstractFeatureStore):
         if not self.cols:
             raise OmeroTableException(
                 'Failed to get columns for table ID:%d' % tid)
+
+    def feature_names(self):
+        if not self.ftnames:
+            m = self.table.getAllMetadata()
+            self.ftnames = [unwrap(m[str(n)])
+                            for n in xrange(self.cols[2].size)]
+        return self.ftnames
 
     def store_by_image(self, image_id, values):
         self.store_by_object('Image', image_id, values)
@@ -342,8 +358,7 @@ class FeatureTable(AbstractFeatureStore):
             raise TableUsageException(
                 'Invalid object type: %s' % object_type)
 
-        for n in xrange(2, len(self.cols)):
-            self.cols[n].values = [values[n - 2]]
+        self.cols[2].values = values
         self.table.addData(self.cols)
         self.create_file_annotation(
             object_type, object_id, self.ann_space,
@@ -388,9 +403,9 @@ class FeatureTable(AbstractFeatureStore):
 
     def feature_row(self, values):
         return FeatureRow(
-            names=[h.name for h in self.cols[2:]],
+            names=self.feature_names(),
             infonames=[h.name for h in self.cols[:2]],
-            values=values[2:], infovalues=values[:2])
+            values=values[2], infovalues=values[:2])
 
     def get_chunk_size(self):
         """
