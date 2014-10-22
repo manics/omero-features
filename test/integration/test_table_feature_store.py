@@ -338,7 +338,6 @@ class TestFeatureTable(TableStoreTestHelper):
             store.get_table()
 
         def get(obj):
-            print obj.__class__.__base__, unwrap(obj.getId())
             # Fetch the latest copy of an object
             return self.sess.getQueryService().find(
                 'omero.model.%s' % obj.__class__.__name__, unwrap(obj.getId()))

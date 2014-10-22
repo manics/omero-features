@@ -385,7 +385,6 @@ class TestFeatureTable(object):
         table.initialize(mox.Func(lambda xs: comparecols(xs, tcols)))
         table.getHeaders().AndReturn(tcols)
 
-
         self.mox.ReplayAll()
 
         store.new_table(desc)
