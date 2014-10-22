@@ -75,7 +75,6 @@ class AbstractFeatureStore(object):
 
         :param image_id: The Image ID
         :param values: The feature values
-        :return: A FeatureRow
         """
         pass
 
@@ -86,7 +85,6 @@ class AbstractFeatureStore(object):
 
         :param image_id: The Image ID
         :param values: The feature values
-        :return: A FeatureRow
         """
         pass
 
@@ -111,11 +109,10 @@ class AbstractFeatureStore(object):
         pass
 
     @abstractmethod
-    def fetch_all(self, featureset_name, image_id):
+    def fetch_all(self, image_id):
         """
         Retrieve all rows of features identified by Image ID
 
-        :param featureset_name: The featureset identifier
         :param image_id: The Image ID
         :return: A list of FeatureRows
         """
