@@ -551,6 +551,20 @@ class TestFeatureTable(object):
 
         self.mox.VerifyAll()
 
+    def test_filter(self):
+        store = MockFeatureTable(None)
+        self.mox.StubOutWithMock(store, 'filter_raw')
+        self.mox.StubOutWithMock(store, 'feature_row')
+        values1 = (0, 1, [5])
+        r1 = object()
+
+        store.filter_raw('RoiID==1').AndReturn([values1])
+        store.feature_row(values1).AndReturn(r1)
+
+        self.mox.ReplayAll()
+        assert store.filter('RoiID==1') == [r1]
+        self.mox.VerifyAll()
+
     def test_fetch_all(self):
         store = MockFeatureTable(None)
         self.mox.StubOutWithMock(store, 'fetch_by_object')
@@ -567,9 +581,22 @@ class TestFeatureTable(object):
         assert store.fetch_all(1) == [r1, r2]
         self.mox.VerifyAll()
 
+    @pytest.mark.parametrize('objtype', ['Image', 'Roi'])
+    def test_fetch_by_object(self, objtype):
+        store = MockFeatureTable(None)
+
+        self.mox.StubOutWithMock(store, 'filter_raw')
+        rs = [1, 0, [1]]
+
+        store.filter_raw('(%sID==99)' % objtype).AndReturn(rs)
+
+        self.mox.ReplayAll()
+        assert store.fetch_by_object(objtype, 99) == rs
+        self.mox.VerifyAll()
+
     @pytest.mark.parametrize('ncols', [1, 2])
     @pytest.mark.parametrize('nrows', [0, 1, 2])
-    def test_fetch_by_object(self, ncols, nrows):
+    def test_filter_raw(self, ncols, nrows):
         table = self.mox.CreateMock(MockTable)
         store = MockFeatureTable(None)
         store.table = table
@@ -595,7 +622,7 @@ class TestFeatureTable(object):
 
         self.mox.ReplayAll()
 
-        rvalues = store.fetch_by_object('Image', 99)
+        rvalues = store.filter_raw('(ImageID==99)')
 
         assert len(rvalues) == len(offsets)
         if ncols == 1 and nrows == 1:

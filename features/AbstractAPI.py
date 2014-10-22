@@ -132,16 +132,17 @@ class AbstractFeatureStore(object):
         """
         pass
 
-    #@abstractmethod
-    def filter(self, featureset_name, conditions):
+    @abstractmethod
+    def filter(self, conditions):
         """
         Retrieve the features and Image/ROI IDs which fulfill the conditions
 
-        :param featureset_name: The featureset identifier
         :param conditions: The feature query conditions
-        :return: A list of (Image-ID, ROI-ID, FeatureRow) triplets
+        :return: A list of FeatureRows
+
+        TODO: Decide on the query syntax
         """
-        raise Exception('Not implemented')
+        pass
 
 
 class AbstractFeatureStoreManager(object):

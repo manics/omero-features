@@ -233,9 +233,7 @@ class TestFeatureTable(TableStoreTestHelper):
 
         store.close()
 
-    @pytest.mark.parametrize('owned', [True, False])
-    @pytest.mark.parametrize('width', [1, 2])
-    def test_fetch_by_object(self, owned, width):
+    def create_table_for_fetch(self, owned, width):
         if owned:
             tablesess = self.sess
         else:
@@ -245,22 +243,65 @@ class TestFeatureTable(TableStoreTestHelper):
         tid, tcols, ftnames = TableStoreHelper.create_table(
             tablesess, self.ft_space, self.name, width)
 
-        tcols[0].values = [12, 0, 12]
-        tcols[1].values = [0, 34, 56]
+        tcols[0].values = [12, 0, 12, 13]
+        tcols[1].values = [0, 34, 56, 0]
         if width == 1:
-            tcols[2].values = [[10], [90], [20]]
+            tcols[2].values = [[10], [90], [20], [30]]
         else:
-            tcols[2].values = [[20, 30], [80, 70], [40, 50]]
+            tcols[2].values = [[20, 30], [80, 70], [40, 50], [60, 70]]
         table = tablesess.sharedResources().openTable(
             omero.model.OriginalFileI(tid))
         table.addData(tcols)
         table.close()
+        return tid
+
+    def test_fetch_by_image(self):
+        tid = self.create_table_for_fetch(owned=True, width=1)
+        store = FeatureTableProxy(
+            self.sess, self.name, self.ft_space, self.ann_space)
+        store.open_table(omero.model.OriginalFileI(tid))
+
+        fr = store.fetch_by_image(13)
+        assert fr.infonames == ['ImageID', 'RoiID']
+        assert fr.infovalues == (13, 0)
+        assert fr.names == ['x1']
+        assert fr.values == [30]
+
+    def test_fetch_by_roi(self):
+        tid = self.create_table_for_fetch(owned=True, width=1)
+        store = FeatureTableProxy(
+            self.sess, self.name, self.ft_space, self.ann_space)
+        store.open_table(omero.model.OriginalFileI(tid))
+
+        fr = store.fetch_by_roi(56)
+        assert fr.infonames == ['ImageID', 'RoiID']
+        assert fr.infovalues == (12, 56)
+        assert fr.names == ['x1']
+        assert fr.values == [20]
+
+    def test_filter(self):
+        tid = self.create_table_for_fetch(owned=True, width=1)
+        store = FeatureTableProxy(
+            self.sess, self.name, self.ft_space, self.ann_space)
+        store.open_table(omero.model.OriginalFileI(tid))
+
+        fr = store.filter('(ImageID==12345) | (RoiID==34)')
+        assert len(fr) == 1
+        assert fr[0].infonames == ['ImageID', 'RoiID']
+        assert fr[0].infovalues == (0, 34)
+        assert fr[0].names == ['x1']
+        assert fr[0].values == [90]
+
+    @pytest.mark.parametrize('owned', [True, False])
+    @pytest.mark.parametrize('width', [1, 2])
+    def test_fetch_by_object(self, owned, width):
+        tid = self.create_table_for_fetch(owned, width)
 
         store = FeatureTableProxy(
             self.sess, self.name, self.ft_space, self.ann_space)
         store.open_table(omero.model.OriginalFileI(tid))
 
-        assert store.table.getNumberOfRows() == 3
+        assert store.table.getNumberOfRows() == 4
 
         rvalues = store.fetch_by_object('Image', 12)
         assert len(rvalues) == 2
@@ -277,6 +318,19 @@ class TestFeatureTable(TableStoreTestHelper):
             assert rvalues[0] == (0, 34, [90])
         else:
             assert rvalues[0] == (0, 34, [80, 70])
+
+        store.close()
+
+    def test_filter_raw(self):
+        tid = self.create_table_for_fetch(owned=True, width=1)
+
+        store = FeatureTableProxy(
+            self.sess, self.name, self.ft_space, self.ann_space)
+        store.open_table(omero.model.OriginalFileI(tid))
+
+        rvalues = store.filter_raw('(ImageID==13) | (RoiID==34)')
+        assert len(rvalues) == 2
+        assert sorted(rvalues) == [(0, 34, [90]), (13, 0, [30])]
 
         store.close()
 

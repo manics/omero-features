@@ -401,14 +401,22 @@ class FeatureTable(AbstractFeatureStore):
         values = self.fetch_by_object('Image', image_id)
         return [self.feature_row(v) for v in values]
 
+    def filter(self, conditions):
+        print 'WARNING: The filter/query syntax is still under development'
+        values = self.filter_raw(conditions)
+        return [self.feature_row(v) for v in values]
+
     def fetch_by_object(self, object_type, object_id):
         if object_type in ('Image', 'Roi'):
             cond = '(%sID==%d)' % (object_type, object_id)
         else:
             raise TableUsageException(
                 'Unsupported object type: %s' % object_type)
+        return self.filter_raw(cond)
+
+    def filter_raw(self, conditions):
         offsets = self.table.getWhereList(
-            cond, {}, 0, self.table.getNumberOfRows(), 0)
+            conditions, {}, 0, self.table.getNumberOfRows(), 0)
         values = self.chunked_table_read(offsets, self.get_chunk_size())
 
         # Convert into row-wise storage
