@@ -61,27 +61,24 @@ class TableStoreHelper(object):
 
     @staticmethod
     def get_columns(w):
+        ftnames = ['x%d' % n for n in xrange(1, w + 1)]
         cols = [
             omero.grid.ImageColumn('ImageID'),
             omero.grid.RoiColumn('RoiID'),
-            omero.grid.DoubleArrayColumn('Features', '', w),
+            omero.grid.DoubleArrayColumn(','.join(ftnames), '', w),
         ]
-        ftnames = ['x%d' % n for n in xrange(1, w + 1)]
         return cols, ftnames
 
     @staticmethod
-    def create_table(sess, path, name):
-        ncols = 2
+    def create_table(sess, path, name, width):
         table = sess.sharedResources().newTable(0, 'name')
-        cols, ftnames = TableStoreHelper.get_columns(ncols)
+        cols, ftnames = TableStoreHelper.get_columns(width)
         table.initialize(cols)
         ofile = table.getOriginalFile()
         ofile.setPath(wrap(path))
         ofile.setName(wrap(name))
         ofile = sess.getUpdateService().saveAndReturnObject(ofile)
         tid = unwrap(ofile.getId())
-        for n in xrange(ncols):
-            table.setMetadata(str(n), wrap(ftnames[n]))
         table.close()
         return tid, cols, ftnames
 
@@ -137,15 +134,14 @@ class TableStoreTestHelper(object):
 
 class TestFeatureTable(TableStoreTestHelper):
 
-    #@pytest.mark.parametrize('exists', [True, False])
-    @pytest.mark.parametrize('exists', [True])
+    @pytest.mark.parametrize('exists', [True, False])
     def test_get_table(self, exists):
         store = FeatureTableProxy(
             self.sess, self.name, self.ft_space, self.ann_space)
 
         if exists:
             tid, tcols, ftnames = TableStoreHelper.create_table(
-                self.sess, self.ft_space, self.name)
+                self.sess, self.ft_space, self.name, 1)
             table = store.get_table()
 
             assert table and table == store.table
@@ -176,7 +172,7 @@ class TestFeatureTable(TableStoreTestHelper):
 
     def test_open_table(self):
         tid, tcols, ftnames = TableStoreHelper.create_table(
-            self.sess, self.ft_space, self.name)
+            self.sess, self.ft_space, self.name, 1)
 
         store = FeatureTableProxy(
             self.sess, self.name, self.ft_space, self.ann_space)
@@ -187,6 +183,7 @@ class TestFeatureTable(TableStoreTestHelper):
 
     @pytest.mark.parametrize('owned', [True, False])
     def test_store_by_object(self, owned):
+        width = 2
         if owned:
             tablesess = self.sess
         else:
@@ -194,7 +191,7 @@ class TestFeatureTable(TableStoreTestHelper):
             tablesess = self.create_client_session(user2)
 
         tid, tcols, ftnames = TableStoreHelper.create_table(
-            tablesess, self.ft_space, self.name)
+            tablesess, self.ft_space, self.name, width)
         imageid = unwrap(TableStoreHelper.create_image(self.sess).getId())
         roiid = unwrap(TableStoreHelper.create_roi(self.sess).getId())
 
@@ -209,7 +206,7 @@ class TestFeatureTable(TableStoreTestHelper):
             assert len(d) == 3
             assert d[0].values == [imageid]
             assert d[1].values == [0]
-            assert d[2].values == [10, 20]
+            assert d[2].values == [[10, 20]]
 
             store.store_by_object('Roi', roiid, [90, 80])
             assert store.table.getNumberOfRows() == 2
@@ -246,7 +243,7 @@ class TestFeatureTable(TableStoreTestHelper):
             tablesess = self.create_client_session(user2)
 
         tid, tcols, ftnames = TableStoreHelper.create_table(
-            tablesess, self.ft_space, self.name)
+            tablesess, self.ft_space, self.name, width)
 
         tcols[0].values = [12, 0, 12]
         tcols[1].values = [0, 34, 56]
@@ -298,7 +295,7 @@ class TestFeatureTable(TableStoreTestHelper):
 
     def test_create_file_annotation(self):
         tid, tcols, ftnames = TableStoreHelper.create_table(
-            self.sess, self.ft_space, self.name)
+            self.sess, self.ft_space, self.name, 1)
         imageid = unwrap(TableStoreHelper.create_image(self.sess).getId())
         ofile = self.sess.getQueryService().get(
             'omero.model.OriginalFile', tid)
@@ -326,7 +323,7 @@ class TestFeatureTable(TableStoreTestHelper):
         iid2 = unwrap(TableStoreHelper.create_image(self.sess).getId())
         store = FeatureTableProxy(
             tablesess, self.name, self.ft_space, self.ann_space)
-        ofile = store.get_table([('x', 1)]).getOriginalFile()
+        ofile = store.get_table(['x']).getOriginalFile()
 
         link1 = store.create_file_annotation(
             'Image', iid1, self.ann_space, ofile)
@@ -378,22 +375,21 @@ class TestFeatureTableManager(TableStoreTestHelper):
 
     def test_create(self, fsname='fsname-create'):
         colnames = ['x1', 'x2']
-        colwidths = [2, 1]
         fts = OmeroTablesFeatureStore.FeatureTableManager(
             self.sess, ft_space=self.ft_space, ann_space=self.ann_space)
-        fs = fts.create(fsname, colnames, colwidths)
+        fs = fts.create(fsname, colnames)
 
         expected_cols = [
             omero.grid.ImageColumn('ImageID', ''),
             omero.grid.RoiColumn('RoiID', ''),
-            omero.grid.DoubleArrayColumn('Features', '', 2),
+            omero.grid.DoubleArrayColumn('x1,x2', '', 2),
         ]
         h = fs.get_table().getHeaders()
         TableStoreHelper.assert_coltypes_equal(expected_cols, h)
         assert fs.feature_names() == colnames
 
         with pytest.raises(OmeroTablesFeatureStore.TooManyTablesException):
-            fs = fts.create(fsname, colnames, colwidths)
+            fs = fts.create(fsname, colnames)
 
     def test_get(self):
         fsname1 = 'fsname-get1'

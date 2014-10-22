@@ -185,9 +185,6 @@ class MockTable:
     def close(self):
         pass
 
-    def getAllMetadata(self):
-        pass
-
     def getHeaders(self):
         pass
 
@@ -204,9 +201,6 @@ class MockTable:
         pass
 
     def readCoordinates(self):
-        pass
-
-    def setMetadata(self, k, v):
         pass
 
 
@@ -384,12 +378,11 @@ class TestFeatureTable(object):
         tcols = [
             omero.grid.ImageColumn('ImageID', ''),
             omero.grid.RoiColumn('RoiID', ''),
-            omero.grid.DoubleArrayColumn('Features', '', 1),
+            omero.grid.DoubleArrayColumn('x', '', 1),
         ]
         desc = ['x']
 
         table.initialize(mox.Func(lambda xs: comparecols(xs, tcols)))
-        table.setMetadata('0', wrap(desc[0]))
         table.getHeaders().AndReturn(tcols)
 
 
@@ -399,6 +392,11 @@ class TestFeatureTable(object):
         assert store.table == table
         assert store.cols == tcols
         self.mox.VerifyAll()
+
+    def test_new_table_invalid_ftname(self):
+        store = MockFeatureTable(None)
+        with pytest.raises(OmeroTablesFeatureStore.TableUsageException):
+            store.new_table(['x1', '<>'])
 
     def test_open_table(self):
         mf = MockOriginalFile(1)
@@ -419,10 +417,8 @@ class TestFeatureTable(object):
         table = self.mox.CreateMock(MockTable)
         store = MockFeatureTable(None)
         store.table = table
-        store.cols = [MockColumn(), MockColumn(), MockColumn(size=2)]
-
-        self.mox.StubOutWithMock(table, 'getAllMetadata')
-        table.getAllMetadata().AndReturn({'0': 'a', '1': 'b', 'other': 'x'})
+        store.cols = [
+            MockColumn(), MockColumn(), MockColumn(name='a,b', size=2)]
 
         self.mox.ReplayAll()
         assert store.feature_names() == ['a', 'b']
@@ -466,7 +462,7 @@ class TestFeatureTable(object):
         mf = MockOriginalFile(3)
         values = [10, 20]
         cols = [MockColumn('a', [12]), MockColumn('b', [0]),
-                MockColumn('c', [10, 20], 2)]
+                MockColumn('c', [[10, 20]], 2)]
 
         table.getOriginalFile().AndReturn(mf)
         perms.can_edit(mf).AndReturn(owned)
@@ -618,7 +614,7 @@ class TestFeatureTable(object):
     def test_feature_row(self):
         store = MockFeatureTable(None)
         store.cols = [MockColumn('ma'), MockColumn('mb'),
-                      MockColumn('f')]
+                      MockColumn()]
         self.mox.StubOutWithMock(store, 'feature_names')
         store.feature_names().AndReturn(['a', 'b'])
         row = [10, 20, [1, 2]]
@@ -795,19 +791,17 @@ class TestFeatureTableManager(object):
         self.mox.StubOutWithMock(OmeroTablesFeatureStore, 'FeatureTable')
         fsname = 'fsname'
         colnames = ['x1', 'x2']
-        colwidths = [2, 1]
 
         OmeroTablesFeatureStore.FeatureTable(
             None, fsname, 'x/features', 'x/source').AndReturn(None)
 
         OmeroTablesFeatureStore.FeatureTable(
-            None, fsname, 'x/features', 'x/source', [('x1', 2), ('x2', 1)]
-            ).AndReturn(fs)
+            None, fsname, 'x/features', 'x/source', colnames).AndReturn(fs)
 
         self.mox.ReplayAll()
 
         fts = OmeroTablesFeatureStore.FeatureTableManager(None, namespace='x')
-        assert fts.create(fsname, colnames, colwidths) == fs
+        assert fts.create(fsname, colnames) == fs
 
         assert len(fts.fss) == 1
         assert fts.fss.get(fsname) == fs

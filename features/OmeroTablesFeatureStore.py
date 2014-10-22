@@ -30,11 +30,14 @@ import omero.clients
 from omero.rtypes import unwrap, wrap
 
 import itertools
+import re
 
 
 DEFAULT_NAMESPACE = 'omero.features/0.1'
 DEFAULT_FEATURE_SUBSPACE = 'features'
 DEFAULT_ANNOTATION_SUBSPACE = 'source'
+
+FEATURE_NAME_RE = r'^[A-Za-z0-9][A-Za-z0-9_ \-\(\)\[\]\{\}\.]*$'
 
 
 class TableStoreException(Exception):
@@ -280,6 +283,10 @@ class FeatureTable(AbstractFeatureStore):
         return self.table
 
     def new_table(self, coldesc):
+        for n in coldesc:
+            if not re.match(FEATURE_NAME_RE, n):
+                raise TableUsageException('Invalid feature name: %s' % n)
+
         tablepath = self.ft_space + '/' + self.name
         self.table = self.session.sharedResources().newTable(0, tablepath)
         if not self.table:
@@ -308,16 +315,25 @@ class FeatureTable(AbstractFeatureStore):
             omero.grid.ImageColumn('ImageID', ''),
             omero.grid.RoiColumn('RoiID', '')
         ]
+
+        # We don't currently have a good way of storing individual feature
+        # names for a DoubleArrayColumn:
+        # - The number of DoubleColumns allowed in a table is limited (and
+        #   slow)
+        # - Tables.setMetadata is broken
+        #   https://trac.openmicroscopy.org.uk/ome/ticket/12606
+        # - Column descriptions can't be retrieved through the API
+        # - The total size of table attributes is limited to around 64K (not
+        #   sure if this is a per-attribute/object/table limitation)
+        # For now save the feature names into the column name.
+        names = ','.join(coldesc)
+        if len(names) > 64000:
+            print ('WARNING: Feature names may exceed the limit of the '
+                   'current Tables API')
         coldef.append(omero.grid.DoubleArrayColumn(
-            'Features', '', len(coldesc)))
+            names, '', len(coldesc)))
 
         self.table.initialize(coldef)
-        # setAllMetadata is currently broken:
-        # https://trac.openmicroscopy.org.uk/ome/ticket/12606
-        # colnames = dict((str(n): coldesc[n]) for n in xrange(len(coldesc)))
-        # self.table.setAllMetadata(colnames)
-        for n in xrange(len(coldesc)):
-            self.table.setMetadata(str(n), wrap(coldesc[n]))
         self.cols = self.table.getHeaders()
         if not self.cols:
             raise OmeroTableException(
@@ -335,9 +351,8 @@ class FeatureTable(AbstractFeatureStore):
 
     def feature_names(self):
         if not self.ftnames:
-            m = self.table.getAllMetadata()
-            self.ftnames = [unwrap(m[str(n)])
-                            for n in xrange(self.cols[2].size)]
+            self.ftnames = self.cols[2].name.split(',')
+            assert len(self.ftnames) == self.cols[2].size
         return self.ftnames
 
     def store_by_image(self, image_id, values):
@@ -358,7 +373,7 @@ class FeatureTable(AbstractFeatureStore):
             raise TableUsageException(
                 'Invalid object type: %s' % object_type)
 
-        self.cols[2].values = values
+        self.cols[2].values = [values]
         self.table.addData(self.cols)
         self.create_file_annotation(
             object_type, object_id, self.ann_space,
@@ -575,7 +590,7 @@ class FeatureTableManager(AbstractFeatureStoreManager):
         self.cachesize = kwargs.get('cachesize', 10)
         self.fss = LRUClosableCache(kwargs.get('cachesize', 10))
 
-    def create(self, featureset_name, names, widths):
+    def create(self, featureset_name, names):
         try:
             fs = self.get(featureset_name)
             if fs:
@@ -584,10 +599,7 @@ class FeatureTableManager(AbstractFeatureStoreManager):
         except NoTableMatchException:
             pass
 
-        if len(names) != len(widths):
-            raise TableUsageException('Invalid column names-widths')
-
-        coldesc = zip(names, widths)
+        coldesc = names
         fs = FeatureTable(
             self.session, featureset_name, self.ft_space, self.ann_space,
             coldesc)
