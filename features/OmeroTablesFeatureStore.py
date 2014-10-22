@@ -379,10 +379,6 @@ class FeatureTable(AbstractFeatureStore):
             object_type, object_id, self.ann_space,
             self.table.getOriginalFile())
 
-    def store(self, object_type, object_ids, valuess):
-        for (object_id, values) in itertools.izip(object_ids, valuess):
-            self.store_by_object(object_type, object_id, values)
-
     def fetch_by_image(self, image_id, last=False):
         values = self.fetch_by_object('Image', image_id)
         if len(values) > 1 and not last:

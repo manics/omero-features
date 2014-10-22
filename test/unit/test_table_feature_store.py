@@ -481,18 +481,6 @@ class TestFeatureTable(object):
 
         self.mox.VerifyAll()
 
-    def test_store(self):
-        store = MockFeatureTable(None)
-        self.mox.StubOutWithMock(store, 'store_by_object')
-        ids = [1, 2]
-        valuess = [[34], [56]]
-        store.store_by_object('Image', 1, [34])
-        store.store_by_object('Image', 2, [56])
-
-        self.mox.ReplayAll()
-        store.store('Image', ids, valuess)
-        self.mox.VerifyAll()
-
     @pytest.mark.parametrize('last', [True, False])
     def test_fetch_by_image(self, last):
         store = MockFeatureTable(None)

@@ -69,17 +69,6 @@ class AbstractFeatureStore(object):
     __metaclass__ = ABCMeta
 
     @abstractmethod
-    def store(self, image_id, roi_id, values):
-        """
-        Store a row of features identified by Image ID and/or ROI ID
-
-        :param image_id: The Image ID
-        :param roi_id: The ROI ID, may be None
-        :params values: A list of FeatureRows
-        """
-        pass
-
-    @abstractmethod
     def store_by_image(self, image_id, values):
         """
         Store a single FeatureRow by Image ID
