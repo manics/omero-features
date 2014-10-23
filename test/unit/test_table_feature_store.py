@@ -172,6 +172,7 @@ class MockColumn:
 
 
 class MockTableData:
+    rowNumbers = None
     columns = None
 
 
@@ -201,6 +202,9 @@ class MockTable:
         pass
 
     def readCoordinates(self):
+        pass
+
+    def update(self):
         pass
 
 
@@ -297,12 +301,25 @@ class TestFeatureTable(object):
     def teardown_method(self, method):
         self.mox.UnsetStubs()
 
-    def parameters_equal(self, a, b):
+    @staticmethod
+    def parameters_equal(a, b):
         return a.map == b.map and (
             (a.theFilter is None and b.theFilter is None) or
             (a.theFilter.__dict__ == b.theFilter.__dict__)) and (
             (a.theOptions is None and b.theOptions is None) or
             (a.theOptions.__dict__ == b.theOptions.__dict__))
+
+    @staticmethod
+    def columns_equal(xs, ys):
+        def comparecol(x, y):
+            return all([
+                type(x) == type(y),
+                x.name == y.name,
+                x.description == y.description,
+                getattr(x, 'size', None) == getattr(y, 'size', None),
+                x.values == y.values
+            ])
+        return all([comparecol(x, y) for x, y in itertools.izip(xs, ys)])
 
     def test_close(self):
         table = self.mox.CreateMock(MockTable)
@@ -356,18 +373,6 @@ class TestFeatureTable(object):
         self.mox.VerifyAll()
 
     def test_new_table(self):
-        def comparecol(x, y):
-            return all([
-                type(x) == type(y),
-                x.name == y.name,
-                x.description == y.description,
-                getattr(x, 'size', None) == getattr(y, 'size', None),
-                x.values == y.values
-            ])
-
-        def comparecols(xs, ys):
-            return all([comparecol(x, y) for x, y in itertools.izip(xs, ys)])
-
         table = self.mox.CreateMock(MockTable)
         session = MockSession(1, table)
         store = MockFeatureTable(session)
@@ -382,7 +387,7 @@ class TestFeatureTable(object):
         ]
         desc = ['x']
 
-        table.initialize(mox.Func(lambda xs: comparecols(xs, tcols)))
+        table.initialize(mox.Func(lambda xs: self.columns_equal(xs, tcols)))
         table.getHeaders().AndReturn(tcols)
 
         self.mox.ReplayAll()
@@ -443,8 +448,9 @@ class TestFeatureTable(object):
         store.store_by_roi(12, values)
         self.mox.VerifyAll()
 
-    @pytest.mark.parametrize('owned', [True, False])
-    def test_store_by_object(self, owned):
+    @pytest.mark.parametrize('exists', [True, False])
+    def test_store_by_object(self, exists):
+        owned = True
         perms = self.mox.CreateMock(MockPermissionsHandler)
         table = self.mox.CreateMock(MockTable)
         store = MockFeatureTable(None)
@@ -454,31 +460,61 @@ class TestFeatureTable(object):
                       MockColumn('c', None, 2)]
 
         self.mox.StubOutWithMock(perms, 'can_edit')
-        self.mox.StubOutWithMock(table, 'addData')
         self.mox.StubOutWithMock(table, 'getOriginalFile')
+        self.mox.StubOutWithMock(table, 'getNumberOfRows')
+        self.mox.StubOutWithMock(table, 'getWhereList')
+        self.mox.StubOutWithMock(table, 'update')
+        self.mox.StubOutWithMock(table, 'addData')
         self.mox.StubOutWithMock(store, 'create_file_annotation')
 
         mf = MockOriginalFile(3)
         values = [10, 20]
-        cols = [MockColumn('a', [12]), MockColumn('b', [0]),
-                MockColumn('c', [[10, 20]], 2)]
+        expectedcols = [MockColumn('a', [12]), MockColumn('b', [0]),
+                        MockColumn('c', [[10, 20]], 2)]
 
         table.getOriginalFile().AndReturn(mf)
         perms.can_edit(mf).AndReturn(owned)
-        if owned:
-            table.addData(cols)
-            table.getOriginalFile().AndReturn(mf)
-            store.create_file_annotation('Image', 12, store.ann_space, mf)
+
+        if exists:
+            offsets = [10, 20]
+        else:
+            offsets = None
+        table.getNumberOfRows().AndReturn(100)
+        table.getWhereList('(ImageID==12) & (RoiID==0)',
+                           {}, 0, 100, 0).AndReturn(offsets)
+
+        if exists:
+            table.update(mox.Func(
+                lambda o: o.rowNumbers == [20] and
+                o.columns == expectedcols))
+        else:
+            table.addData(expectedcols)
+        table.getOriginalFile().AndReturn(mf)
+        store.create_file_annotation('Image', 12, store.ann_space, mf)
 
         self.mox.ReplayAll()
+        store.store_by_object('Image', 12, values)
+        self.mox.VerifyAll()
 
-        if owned:
-            store.store_by_object('Image', 12, values)
-        else:
-            with pytest.raises(
-                    OmeroTablesFeatureStore.FeaturePermissionException):
-                store.store_by_object('Image', 12, values)
+    def test_store_by_object_unowned(self):
+        owned = False
+        perms = self.mox.CreateMock(MockPermissionsHandler)
+        table = self.mox.CreateMock(MockTable)
+        store = MockFeatureTable(None)
+        store.perms = perms
+        store.table = table
 
+        self.mox.StubOutWithMock(perms, 'can_edit')
+        self.mox.StubOutWithMock(table, 'getOriginalFile')
+
+        mf = MockOriginalFile(3)
+        table.getOriginalFile().AndReturn(mf)
+        perms.can_edit(mf).AndReturn(owned)
+
+        self.mox.ReplayAll()
+        with pytest.raises(
+                OmeroTablesFeatureStore.FeaturePermissionException):
+            store.store_by_object('Image', 12, [])
         self.mox.VerifyAll()
 
     @pytest.mark.parametrize('last', [True, False])

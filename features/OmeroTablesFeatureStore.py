@@ -362,7 +362,7 @@ class FeatureTable(AbstractFeatureStore):
         self.store_by_object('Roi', roi_id, values)
 
     @_owns_table
-    def store_by_object(self, object_type, object_id, values):
+    def store_by_object(self, object_type, object_id, values, replace=True):
         if object_type == 'Image':
             self.cols[0].values = [object_id]
             self.cols[1].values = [0]
@@ -373,8 +373,23 @@ class FeatureTable(AbstractFeatureStore):
             raise TableUsageException(
                 'Invalid object type: %s' % object_type)
 
+        offset = -1
+        if replace:
+            conditions = '(ImageID==%d) & (RoiID==%d)' % (
+                self.cols[0].values[0], self.cols[1].values[0])
+            offsets = self.table.getWhereList(
+                conditions, {}, 0, self.table.getNumberOfRows(), 0)
+            if offsets:
+                offset = max(offsets)
+
         self.cols[2].values = [values]
-        self.table.addData(self.cols)
+
+        if offset > -1:
+            data = omero.grid.Data(rowNumbers=[offset], columns=self.cols)
+            self.table.update(data)
+        else:
+            self.table.addData(self.cols)
+
         self.create_file_annotation(
             object_type, object_id, self.ann_space,
             self.table.getOriginalFile())
