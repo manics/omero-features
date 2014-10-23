@@ -700,25 +700,64 @@ class TestFeatureTable(object):
         assert store.get_objects('ObjectType', kvs) == [m]
         self.mox.VerifyAll()
 
-    def test_create_file_annotation(self):
+    @pytest.mark.parametrize('exists', [True, False])
+    def test_create_file_annotation(self, exists):
         session = MockSession(None, None)
         store = MockFeatureTable(session)
         self.mox.StubOutWithMock(store, 'get_objects')
+        self.mox.StubOutWithMock(store, '_file_annotation_exists')
         self.mox.StubOutWithMock(session.us, 'saveAndReturnObject')
 
         ofile = omero.model.OriginalFileI(2)
-        image = omero.model.ImageI(2)
-        store.get_objects('Image', {'id': 3}).AndReturn([image])
-        mocklink = object()
+        image = omero.model.ImageI(3)
 
-        session.us.saveAndReturnObject(mox.Func(
-            lambda o: o.getParent() == image and
-            o.getChild().getNs() == wrap('ns') and
-            o.getChild().getFile() == ofile)).AndReturn(mocklink)
+        if exists:
+            r = [MockOmeroObject(21), MockOmeroObject(22)]
+        else:
+            r = []
+        store._file_annotation_exists('Image', 3, 'ns', 2).AndReturn(r)
+
+        if not exists:
+            store.get_objects('Image', {'id': 3}).AndReturn([image])
+            mocklink = MockOmeroObject(23)
+
+            session.us.saveAndReturnObject(mox.Func(
+                lambda o: o.getParent() == image and
+                o.getChild().getNs() == wrap('ns') and
+                o.getChild().getFile() == ofile)).AndReturn(mocklink)
+
         self.mox.ReplayAll()
+        if exists:
+            assert store.create_file_annotation(
+                'Image', 3, 'ns', ofile) == r[0]
+        else:
+            assert store.create_file_annotation(
+                'Image', 3, 'ns', ofile) == mocklink
+        self.mox.VerifyAll()
 
-        assert store.create_file_annotation(
-            'Image', 3, 'ns', ofile) == mocklink
+    def test_file_annotation_exists(self):
+        session = MockSession(None, None)
+        store = MockFeatureTable(session)
+        self.mox.StubOutWithMock(session.qs, 'findAllByQuery')
+
+        imageid = 3
+        fileid = 2
+        ns = 'ns'
+        result = [object()]
+        params = omero.sys.ParametersI()
+        params.addLong('parent', imageid)
+        params.addLong('file', fileid)
+        params.addString('ns', ns)
+
+        session.qs.findAllByQuery(
+            'FROM ImageAnnotationLink ial WHERE ial.parent.id=:parent AND '
+            'ial.child.ns=:ns AND ial.child.file.id=:file',
+            mox.Func(lambda o: self.parameters_equal(params, o))).AndReturn(
+            result)
+
+        self.mox.ReplayAll()
+        assert store._file_annotation_exists(
+            'Image', imageid, ns, fileid) == result
         self.mox.VerifyAll()
 
     def test_delete(self):

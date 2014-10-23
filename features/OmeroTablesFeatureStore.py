@@ -479,6 +479,14 @@ class FeatureTable(AbstractFeatureStore):
         return results
 
     def create_file_annotation(self, object_type, object_id, ns, ofile):
+        fid = unwrap(ofile.getId())
+        links = self._file_annotation_exists(object_type, object_id, ns, fid)
+        if len(links) > 1:
+            print 'WARNING: Multiple links found: ns:%s %s:%d file:%d' % (
+                ns, object_type, object_id, fid)
+        if links:
+            return links[0]
+
         obj = self.get_objects(object_type, {'id': object_id})
         if len(obj) != 1:
             raise OmeroTableException(
@@ -491,6 +499,16 @@ class FeatureTable(AbstractFeatureStore):
         link.setChild(ann)
         link = self.session.getUpdateService().saveAndReturnObject(link)
         return link
+
+    def _file_annotation_exists(self, object_type, object_id, ns, file_id):
+        q = ('FROM %sAnnotationLink ial WHERE ial.parent.id=:parent AND '
+             'ial.child.ns=:ns AND ial.child.file.id=:file') % object_type
+        params = omero.sys.ParametersI()
+        params.addLong('parent', object_id)
+        params.addString('ns', ns)
+        params.addLong('file', file_id)
+        links = self.session.getQueryService().findAllByQuery(q, params)
+        return links
 
     @_owns_table
     def delete(self):

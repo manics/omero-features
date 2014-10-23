@@ -356,6 +356,9 @@ class TestFeatureTable(TableStoreTestHelper):
         store = FeatureTableProxy(
             self.sess, self.name, self.ft_space, self.ann_space)
 
+        assert store._file_annotation_exists(
+            'Image', imageid, self.ann_space, tid) == []
+
         link = store.create_file_annotation(
             'Image', imageid, self.ann_space, ofile)
         p = link.getParent()
@@ -364,6 +367,11 @@ class TestFeatureTable(TableStoreTestHelper):
         assert isinstance(c, omero.model.FileAnnotation)
         assert unwrap(p.getId()) == imageid
         assert unwrap(c.getFile().getId()) == tid
+
+        links = store._file_annotation_exists(
+            'Image', imageid, self.ann_space, tid)
+        assert len(links) == 1
+        assert links[0].__class__ == link.__class__ and links[0].id == link.id
 
     @pytest.mark.parametrize('owned', [True, False])
     def test_delete(self, owned):
