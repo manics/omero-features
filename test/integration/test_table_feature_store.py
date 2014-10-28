@@ -151,6 +151,8 @@ class TestFeatureTable(TableStoreTestHelper):
             with pytest.raises(OmeroTablesFeatureStore.NoTableMatchException):
                 store.get_table(uid)
 
+        store.close()
+
     def test_new_table(self):
         tcols, ftnames = TableStoreHelper.get_columns(2)
 
@@ -181,6 +183,8 @@ class TestFeatureTable(TableStoreTestHelper):
         assert store.table
         TableStoreHelper.assert_coltypes_equal(store.cols, tcols)
         assert store.feature_names() == ftnames
+
+        store.close()
 
     @pytest.mark.parametrize('exists', [True, False])
     @pytest.mark.parametrize('replace', [True, False])
@@ -300,6 +304,8 @@ class TestFeatureTable(TableStoreTestHelper):
         assert fr.names == ['x1']
         assert fr.values == [30]
 
+        store.close()
+
     def test_fetch_by_roi(self):
         tid = self.create_table_for_fetch(owned=True, width=1)
         store = FeatureTableProxy(
@@ -311,6 +317,8 @@ class TestFeatureTable(TableStoreTestHelper):
         assert fr.infovalues == (12, 56)
         assert fr.names == ['x1']
         assert fr.values == [20]
+
+        store.close()
 
     def test_filter(self):
         tid = self.create_table_for_fetch(owned=True, width=1)
@@ -324,6 +332,8 @@ class TestFeatureTable(TableStoreTestHelper):
         assert fr[0].infovalues == (-1, 34)
         assert fr[0].names == ['x1']
         assert fr[0].values == [90]
+
+        store.close()
 
     @pytest.mark.parametrize('owned', [True, False])
     @pytest.mark.parametrize('width', [1, 2])
@@ -380,6 +390,8 @@ class TestFeatureTable(TableStoreTestHelper):
         assert sorted(unwrap(r.getId()) for r in rs) == unwrap(
             [ims[0].getId(), ims[2].getId()])
 
+        store.close()
+
     def test_create_file_annotation(self):
         tid, tcols, ftnames = TableStoreHelper.create_table(
             self.sess, self.ft_space, self.name, 1)
@@ -405,6 +417,8 @@ class TestFeatureTable(TableStoreTestHelper):
             'Image', imageid, self.ann_space, tid)
         assert len(links) == 1
         assert links[0].__class__ == link.__class__ and links[0].id == link.id
+
+        store.close()
 
     @pytest.mark.parametrize('owned', [True, False])
     def test_delete(self, owned):
@@ -467,6 +481,8 @@ class TestFeatureTable(TableStoreTestHelper):
                     OmeroTablesFeatureStore.FeaturePermissionException):
                 store.delete()
 
+        store.close()
+
 
 class TestFeatureTableManager(TableStoreTestHelper):
 
@@ -520,12 +536,14 @@ class TestFeatureTableManager(TableStoreTestHelper):
         user2 = self.create_user_same_group()
         sess2 = self.create_client_session(user2)
         uid2 = unwrap(user2.getId())
-        fts = OmeroTablesFeatureStore.FeatureTableManager(
+        fts2 = OmeroTablesFeatureStore.FeatureTableManager(
             sess2, ft_space=self.ft_space, ann_space=self.ann_space)
 
         # Check ownerId is respected
         with pytest.raises(OmeroTablesFeatureStore.NoTableMatchException):
-            fts.get(fsname1)
+            fts2.get(fsname1)
         with pytest.raises(OmeroTablesFeatureStore.NoTableMatchException):
-            fts.get(fsname1, uid2)
+            fts2.get(fsname1, uid2)
         assert fts.get(fsname1, uid) is not None
+
+        fts2.close()

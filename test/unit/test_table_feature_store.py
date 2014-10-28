@@ -135,6 +135,7 @@ class MockAdminService:
         ec.userId = self.uid
         return ec
 
+
 class MockSession:
     def __init__(self, tid, table, uid):
         self.us = MockUpdateService()
