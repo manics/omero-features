@@ -39,6 +39,9 @@ DEFAULT_ANNOTATION_SUBSPACE = 'source'
 
 FEATURE_NAME_RE = r'^[A-Za-z0-9][A-Za-z0-9_ \-\(\)\[\]\{\}\.]*$'
 
+# Indicates the object ID is unknown
+NOID = -1
+
 
 class TableStoreException(Exception):
     """
@@ -358,20 +361,44 @@ class FeatureTable(AbstractFeatureStore):
     def store_by_image(self, image_id, values):
         self.store_by_object('Image', image_id, values)
 
-    def store_by_roi(self, roi_id, values):
-        self.store_by_object('Roi', roi_id, values)
+    def store_by_roi(self, roi_id, values, image_id=None):
+        if image_id is None:
+            params = omero.sys.ParametersI()
+            params.addId(roi_id)
+            image_id = self.session.getQueryService().projection(
+                'SELECT r.image.id FROM Roi r WHERE r.id=:id', params)
+            try:
+                image_id = unwrap(image_id[0][0])
+            except IndexError:
+                raise TableUsageException('No image found for Roi: %d', roi_id)
+        if image_id < 0:
+            self.store_by_object('Roi', roi_id, values)
+        else:
+            self.store_by_object('Roi', roi_id, values, 'Image', image_id)
 
     @_owns_table
-    def store_by_object(self, object_type, object_id, values, replace=True):
+    def store_by_object(self, object_type, object_id, values,
+                        parent_type=None, parent_id=None, replace=True):
+        image_id = NOID
+        roi_id = NOID
         if object_type == 'Image':
-            self.cols[0].values = [object_id]
-            self.cols[1].values = [0]
+            if parent_type:
+                raise TableUsageException('Parent not supported for Image')
+            image_id = object_id
         elif object_type == 'Roi':
-            self.cols[1].values = [object_id]
-            self.cols[0].values = [0]
+            roi_id = object_id
+            if parent_type:
+                if parent_type == 'Image':
+                    image_id = parent_id
+                else:
+                    raise TableUsageException(
+                        'Invalid parent type: %s', parent_type)
         else:
             raise TableUsageException(
                 'Invalid object type: %s' % object_type)
+
+        self.cols[0].values = [image_id]
+        self.cols[1].values = [roi_id]
 
         offset = -1
         if replace:
@@ -390,9 +417,13 @@ class FeatureTable(AbstractFeatureStore):
         else:
             self.table.addData(self.cols)
 
-        self.create_file_annotation(
-            object_type, object_id, self.ann_space,
-            self.table.getOriginalFile())
+        if image_id > NOID:
+            self.create_file_annotation('Image', image_id, self.ann_space,
+                                        self.table.getOriginalFile())
+        if roi_id > NOID:
+            self.create_file_annotation('Roi', roi_id, self.ann_space,
+                                        self.table.getOriginalFile())
+
 
     def fetch_by_image(self, image_id, last=False):
         values = self.fetch_by_object('Image', image_id)

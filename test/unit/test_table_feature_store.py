@@ -119,6 +119,9 @@ class MockQueryService:
     def findAllByQuery(self, q, p):
         pass
 
+    def projection(self, q, p):
+        pass
+
 
 class MockSession:
     def __init__(self, tid, table):
@@ -438,14 +441,39 @@ class TestFeatureTable(object):
         store.store_by_image(12, values)
         self.mox.VerifyAll()
 
-    def test_store_by_roi(self):
-        store = MockFeatureTable(None)
+    @pytest.mark.parametrize('image', ['provided', 'unknown', 'lookup'])
+    def test_store_by_roi(self, image):
+        session = MockSession(None, None)
+        store = MockFeatureTable(session)
+        self.mox.StubOutWithMock(session.qs, 'projection')
         self.mox.StubOutWithMock(store, 'store_by_object')
         values = [34]
-        store.store_by_object('Roi', 12, values)
+
+        if image == 'lookup':
+            params = omero.sys.ParametersI()
+            params.addId(12)
+            session.getQueryService().projection(
+                'SELECT r.image.id FROM Roi r WHERE r.id=:id', mox.Func(
+                lambda o: self.parameters_equal(params, o))).AndReturn(
+                [[wrap(1234)]])
+            imageid = 1234
+        elif image == 'provided':
+            imageid = 123
+        else:
+            imageid = None
+
+        if imageid is None:
+            store.store_by_object('Roi', 12, values)
+        else:
+            store.store_by_object('Roi', 12, values, 'Image', imageid)
 
         self.mox.ReplayAll()
-        store.store_by_roi(12, values)
+        if image == 'lookup':
+            store.store_by_roi(12, values)
+        elif image == 'provided':
+            store.store_by_roi(12, values, 123)
+        else:
+            store.store_by_roi(12, values, -1)
         self.mox.VerifyAll()
 
     @pytest.mark.parametrize('exists', [True, False])
@@ -469,7 +497,7 @@ class TestFeatureTable(object):
 
         mf = MockOriginalFile(3)
         values = [10, 20]
-        expectedcols = [MockColumn('a', [12]), MockColumn('b', [0]),
+        expectedcols = [MockColumn('a', [12]), MockColumn('b', [-1]),
                         MockColumn('c', [[10, 20]], 2)]
 
         table.getOriginalFile().AndReturn(mf)
@@ -480,7 +508,7 @@ class TestFeatureTable(object):
         else:
             offsets = None
         table.getNumberOfRows().AndReturn(100)
-        table.getWhereList('(ImageID==12) & (RoiID==0)',
+        table.getWhereList('(ImageID==12) & (RoiID==-1)',
                            {}, 0, 100, 0).AndReturn(offsets)
 
         if exists:

@@ -207,14 +207,14 @@ class TestFeatureTable(TableStoreTestHelper):
             d = store.table.readCoordinates(range(0, 2)).columns
             assert len(d) == 3
             assert d[0].values == [imageid, imageid]
-            assert d[1].values == [0, 0]
+            assert d[1].values == [-1, -1]
             assert d[2].values == [[10, 20], [10, 20]]
         else:
             assert store.table.getNumberOfRows() == 1
             d = store.table.readCoordinates(range(0, 1)).columns
             assert len(d) == 3
             assert d[0].values == [imageid]
-            assert d[1].values == [0]
+            assert d[1].values == [-1]
             assert d[2].values == [[10, 20]]
 
         store.store_by_object('Roi', roiid, [90, 80], replace=replace)
@@ -223,15 +223,15 @@ class TestFeatureTable(TableStoreTestHelper):
             assert store.table.getNumberOfRows() == 3
             d = store.table.readCoordinates(range(0, 3)).columns
             assert len(d) == 3
-            assert d[0].values == [imageid, imageid, 0]
-            assert d[1].values == [0, 0, roiid]
+            assert d[0].values == [imageid, imageid, -1]
+            assert d[1].values == [-1, -1, roiid]
             assert d[2].values == [[10, 20], [10, 20], [90, 80]]
         else:
             assert store.table.getNumberOfRows() == 2
             d = store.table.readCoordinates(range(0, 2)).columns
             assert len(d) == 3
-            assert d[0].values == [imageid, 0]
-            assert d[1].values == [0, roiid]
+            assert d[0].values == [imageid, -1]
+            assert d[1].values == [-1, roiid]
             assert d[2].values == [[10, 20], [90, 80]]
 
         qs = self.sess.getQueryService()
@@ -277,8 +277,8 @@ class TestFeatureTable(TableStoreTestHelper):
         tid, tcols, ftnames = TableStoreHelper.create_table(
             tablesess, self.ft_space, self.name, width)
 
-        tcols[0].values = [12, 0, 12, 13]
-        tcols[1].values = [0, 34, 56, 0]
+        tcols[0].values = [12, -1, 12, 13]
+        tcols[1].values = [-1, 34, 56, -1]
         if width == 1:
             tcols[2].values = [[10], [90], [20], [30]]
         else:
@@ -297,7 +297,7 @@ class TestFeatureTable(TableStoreTestHelper):
 
         fr = store.fetch_by_image(13)
         assert fr.infonames == ['ImageID', 'RoiID']
-        assert fr.infovalues == (13, 0)
+        assert fr.infovalues == (13, -1)
         assert fr.names == ['x1']
         assert fr.values == [30]
 
@@ -322,7 +322,7 @@ class TestFeatureTable(TableStoreTestHelper):
         fr = store.filter('(ImageID==12345) | (RoiID==34)')
         assert len(fr) == 1
         assert fr[0].infonames == ['ImageID', 'RoiID']
-        assert fr[0].infovalues == (0, 34)
+        assert fr[0].infovalues == (-1, 34)
         assert fr[0].names == ['x1']
         assert fr[0].values == [90]
 
@@ -340,18 +340,18 @@ class TestFeatureTable(TableStoreTestHelper):
         rvalues = store.fetch_by_object('Image', 12)
         assert len(rvalues) == 2
         if width == 1:
-            assert rvalues[0] == (12, 0, [10])
+            assert rvalues[0] == (12, -1, [10])
             assert rvalues[1] == (12, 56, [20])
         else:
-            assert rvalues[0] == (12, 0, [20, 30])
+            assert rvalues[0] == (12, -1, [20, 30])
             assert rvalues[1] == (12, 56, [40, 50])
 
         rvalues = store.fetch_by_object('Roi', 34)
         assert len(rvalues) == 1
         if width == 1:
-            assert rvalues[0] == (0, 34, [90])
+            assert rvalues[0] == (-1, 34, [90])
         else:
-            assert rvalues[0] == (0, 34, [80, 70])
+            assert rvalues[0] == (-1, 34, [80, 70])
 
         store.close()
 
@@ -364,7 +364,7 @@ class TestFeatureTable(TableStoreTestHelper):
 
         rvalues = store.filter_raw('(ImageID==13) | (RoiID==34)')
         assert len(rvalues) == 2
-        assert sorted(rvalues) == [(0, 34, [90]), (13, 0, [30])]
+        assert sorted(rvalues) == [(-1, 34, [90]), (13, -1, [30])]
 
         store.close()
 
