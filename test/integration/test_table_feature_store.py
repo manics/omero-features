@@ -138,17 +138,18 @@ class TestFeatureTable(TableStoreTestHelper):
     def test_get_table(self, exists):
         store = FeatureTableProxy(
             self.sess, self.name, self.ft_space, self.ann_space)
+        uid = unwrap(self.user.getId())
 
         if exists:
             tid, tcols, ftnames = TableStoreHelper.create_table(
                 self.sess, self.ft_space, self.name, 1)
-            table = store.get_table()
+            table = store.get_table(uid)
 
             assert table and table == store.table
             TableStoreHelper.assert_coltypes_equal(store.cols, tcols)
         else:
             with pytest.raises(OmeroTablesFeatureStore.NoTableMatchException):
-                store.get_table()
+                store.get_table(uid)
 
     def test_new_table(self):
         tcols, ftnames = TableStoreHelper.get_columns(2)
@@ -407,17 +408,20 @@ class TestFeatureTable(TableStoreTestHelper):
 
     @pytest.mark.parametrize('owned', [True, False])
     def test_delete(self, owned):
+        uid = unwrap(self.user.getId())
         if owned:
             tablesess = self.sess
+            ownerid = uid
         else:
             user2 = self.create_user_same_group()
             tablesess = self.create_client_session(user2)
+            ownerid = unwrap(user2.getId())
 
         iid1 = unwrap(TableStoreHelper.create_image(self.sess).getId())
         iid2 = unwrap(TableStoreHelper.create_image(self.sess).getId())
         store = FeatureTableProxy(
             tablesess, self.name, self.ft_space, self.ann_space)
-        ofile = store.get_table(['x']).getOriginalFile()
+        ofile = store.get_table(ownerid, ['x']).getOriginalFile()
 
         link1 = store.create_file_annotation(
             'Image', iid1, self.ann_space, ofile)
@@ -429,7 +433,7 @@ class TestFeatureTable(TableStoreTestHelper):
             # Reopen the store with a different session
             store = FeatureTableProxy(
                 self.sess, self.name, self.ft_space, self.ann_space)
-            store.get_table()
+            store.get_table(ownerid)
 
         def get(obj):
             # Fetch the latest copy of an object
@@ -467,6 +471,7 @@ class TestFeatureTable(TableStoreTestHelper):
 class TestFeatureTableManager(TableStoreTestHelper):
 
     def test_create(self, fsname='fsname-create'):
+        uid = unwrap(self.user.getId())
         colnames = ['x1', 'x2']
         fts = OmeroTablesFeatureStore.FeatureTableManager(
             self.sess, ft_space=self.ft_space, ann_space=self.ann_space)
@@ -477,14 +482,17 @@ class TestFeatureTableManager(TableStoreTestHelper):
             omero.grid.RoiColumn('RoiID', ''),
             omero.grid.DoubleArrayColumn('x1,x2', '', 2),
         ]
-        h = fs.get_table().getHeaders()
+        h = fs.get_table(uid).getHeaders()
         TableStoreHelper.assert_coltypes_equal(expected_cols, h)
         assert fs.feature_names() == colnames
 
         with pytest.raises(OmeroTablesFeatureStore.TooManyTablesException):
             fs = fts.create(fsname, colnames)
 
+        fts.close()
+
     def test_get(self):
+        uid = unwrap(self.user.getId())
         fsname1 = 'fsname-get1'
         fsname2 = 'fsname-get2'
         fts = OmeroTablesFeatureStore.FeatureTableManager(
@@ -504,5 +512,20 @@ class TestFeatureTableManager(TableStoreTestHelper):
         fs2 = fts.get(fsname2)
         assert fs2 is not None
 
-        assert unwrap(fs1.get_table().getOriginalFile().getId()) != unwrap(
-            fs2.get_table().getOriginalFile().getId())
+        assert unwrap(fs1.get_table(uid).getOriginalFile().getId()) != unwrap(
+            fs2.get_table(uid).getOriginalFile().getId())
+
+        fts.close()
+
+        user2 = self.create_user_same_group()
+        sess2 = self.create_client_session(user2)
+        uid2 = unwrap(user2.getId())
+        fts = OmeroTablesFeatureStore.FeatureTableManager(
+            sess2, ft_space=self.ft_space, ann_space=self.ann_space)
+
+        # Check ownerId is respected
+        with pytest.raises(OmeroTablesFeatureStore.NoTableMatchException):
+            fts.get(fsname1)
+        with pytest.raises(OmeroTablesFeatureStore.NoTableMatchException):
+            fts.get(fsname1, uid2)
+        assert fts.get(fsname1, uid) is not None

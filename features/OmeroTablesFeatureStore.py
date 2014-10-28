@@ -215,13 +215,16 @@ class PermissionsHandler(object):
     def __init__(self, session):
         self.context = session.getAdminService().getEventContext()
 
+    def get_userid(self):
+        return self.context.userId
+
     def can_annotate(self, obj):
         p = obj.getDetails().getPermissions()
         return p.canAnnotate()
 
     def can_edit(self, obj):
         d = obj.getDetails()
-        return (self.context.userId == unwrap(d.getOwner().id) and
+        return (self.get_userid() == unwrap(d.getOwner().id) and
                 d.getPermissions().canEdit())
 
 
@@ -231,7 +234,8 @@ class FeatureTable(AbstractFeatureStore):
     Each row is an array of fixed width DoubleArrays
     """
 
-    def __init__(self, session, name, ft_space, ann_space, coldesc=None):
+    def __init__(self, session, name, ft_space, ann_space, ownerid,
+                 coldesc=None):
         self.session = session
         self.perms = PermissionsHandler(session)
         self.name = name
@@ -241,7 +245,7 @@ class FeatureTable(AbstractFeatureStore):
         self.table = None
         self.ftnames = None
         self.chunk_size = None
-        self.get_table(coldesc)
+        self.get_table(ownerid, coldesc=coldesc)
 
     def _owns_table(func):
         def assert_owns_table(*args, **kwargs):
@@ -262,13 +266,14 @@ class FeatureTable(AbstractFeatureStore):
             self.cols = None
             self.ftnames = None
 
-    def get_table(self, coldesc=None):
+    def get_table(self, ownerid, coldesc=None):
         """
         Get the table using the parameters specified during initialisation
 
+        :param ownerid: The user-ID of the owner of the table file
         :param coldesc: If provided a new table will be created and
-        initialised with this list of feature names, default None (table must
-        already exist)
+               initialised with this list of feature names, default None
+               (table must already exist)
         """
         tablepath = self.ft_space + '/' + self.name
         if self.table:
@@ -278,12 +283,18 @@ class FeatureTable(AbstractFeatureStore):
             assert self.cols
             return self.table
 
-        tablefile = self.get_objects(
-            'OriginalFile', {'name': self.name, 'path': self.ft_space})
+        q = {'name': self.name, 'path': self.ft_space}
+        if ownerid > -1:
+            q['details.owner.id'] = ownerid
+        tablefile = self.get_objects('OriginalFile', q)
+
         if coldesc:
             if tablefile:
                 raise TooManyTablesException(
                     'Table file already exists: %s' % tablepath)
+            if self.perms.get_userid() != ownerid:
+                raise TableUsageException(
+                    'Unable to create table for a different user')
             self.new_table(coldesc)
         else:
             if len(tablefile) < 1:
@@ -569,13 +580,14 @@ class FeatureTable(AbstractFeatureStore):
         conditions = []
 
         for k, v in kvs.iteritems():
+            ek = k.replace('_', '__').replace('.', '_')
             if isinstance(v, list):
                 conditions.append(
-                    '%s in (:%s)' % (k, k))
+                    '%s in (:%s)' % (k, ek))
             else:
                 conditions.append(
-                    '%s = :%s' % (k, k))
-            params.add(k, wrap(v))
+                    '%s = :%s' % (k, ek))
+            params.add(ek, wrap(v))
 
         q = 'FROM %s' % object_type
         if conditions:
@@ -731,7 +743,8 @@ class FeatureTableManager(AbstractFeatureStoreManager):
 
     def create(self, featureset_name, names):
         try:
-            fs = self.get(featureset_name)
+            ownerid = self.session.getAdminService().getEventContext().userId
+            fs = self.get(featureset_name, ownerid)
             if fs:
                 raise TooManyTablesException(
                     'Featureset already exists: %s' % featureset_name)
@@ -741,18 +754,22 @@ class FeatureTableManager(AbstractFeatureStoreManager):
         coldesc = names
         fs = FeatureTable(
             self.session, featureset_name, self.ft_space, self.ann_space,
-            coldesc)
-        self.fss.insert(featureset_name, fs)
+            ownerid, coldesc)
+        self.fss.insert((featureset_name, ownerid), fs)
         return fs
 
-    def get(self, featureset_name):
-        fs = self.fss.get(featureset_name)
+    def get(self, featureset_name, ownerid=None):
+        if ownerid is None:
+            ownerid = self.session.getAdminService().getEventContext().userId
+        k = (featureset_name, ownerid)
+        fs = self.fss.get(k)
         # If fs.table is None it has probably been closed
         if not fs or not fs.table:
             fs = FeatureTable(
-                self.session, featureset_name, self.ft_space, self.ann_space)
+                self.session, featureset_name, self.ft_space, self.ann_space,
+                ownerid)
             # raises NoTableMatchException if not found
-            self.fss.insert(featureset_name, fs)
+            self.fss.insert(k, fs)
         return fs
 
     def close(self):

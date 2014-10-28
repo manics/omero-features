@@ -123,10 +123,23 @@ class MockQueryService:
         pass
 
 
+class MockAdminService:
+    class MockEventContext:
+        userId = None
+
+    def __init__(self, uid):
+        self.uid = uid
+
+    def getEventContext(self):
+        ec = self.MockEventContext()
+        ec.userId = self.uid
+        return ec
+
 class MockSession:
-    def __init__(self, tid, table):
+    def __init__(self, tid, table, uid):
         self.us = MockUpdateService()
         self.qs = MockQueryService()
+        self.adm = MockAdminService(uid)
         self.msr = MockSharedResources(tid, table)
 
     def getUpdateService(self):
@@ -134,6 +147,9 @@ class MockSession:
 
     def getQueryService(self):
         return self.qs
+
+    def getAdminService(self):
+        return self.adm
 
     def sharedResources(self):
         return self.msr
@@ -213,6 +229,9 @@ class MockTable:
 
 class MockPermissionsHandler:
     def __init__(self):
+        pass
+
+    def get_userid(self):
         pass
 
     def can_annotate(self, obj):
@@ -338,16 +357,26 @@ class TestFeatureTable(object):
 
     @pytest.mark.parametrize('opened', [True, False])
     @pytest.mark.parametrize('create', [True, False])
-    def test_get_table(self, opened, create):
+    @pytest.mark.parametrize('owned', [True, False])
+    def test_get_table(self, opened, create, owned):
         mf = MockOriginalFile(1)
+        perms = self.mox.CreateMock(MockPermissionsHandler)
+        self.mox.StubOutWithMock(perms, 'get_userid')
         store = MockFeatureTable(None)
+        store.perms = perms
         self.mox.StubOutWithMock(store, 'get_objects')
         self.mox.StubOutWithMock(store, 'open_table')
         self.mox.StubOutWithMock(store, 'new_table')
         table = self.mox.CreateMock(MockTable)
+        userid = 123
+        if owned:
+            ownerid = userid
+        else:
+            ownerid = 321
 
         col_desc = ['x']
-        filedesc = {'name': 'table-name', 'path': store.ft_space}
+        filedesc = {'name': 'table-name', 'path': store.ft_space,
+                    'details.owner.id': ownerid}
 
         if opened:
             store.table = table
@@ -355,7 +384,9 @@ class TestFeatureTable(object):
         else:
             if create:
                 store.get_objects('OriginalFile', filedesc).AndReturn(None)
-                store.new_table(col_desc)
+                perms.get_userid().AndReturn(userid)
+                if owned:
+                    store.new_table(col_desc)
             else:
                 store.get_objects('OriginalFile', filedesc).AndReturn([mf])
                 store.open_table(mf)
@@ -365,19 +396,19 @@ class TestFeatureTable(object):
         # open_table is mocked so it won't set store.table
         # assert store.get_table() == table
         if create:
-            if opened:
+            if opened or not owned:
                 with pytest.raises(
                         OmeroTablesFeatureStore.TableUsageException):
-                    store.get_table(col_desc)
+                    store.get_table(ownerid, col_desc)
             else:
-                store.get_table(col_desc)
+                store.get_table(ownerid, col_desc)
         else:
-            store.get_table()
+            store.get_table(ownerid)
         self.mox.VerifyAll()
 
     def test_new_table(self):
         table = self.mox.CreateMock(MockTable)
-        session = MockSession(1, table)
+        session = MockSession(1, table, None)
         store = MockFeatureTable(session)
 
         mf = MockOriginalFile(1, 'table-name', store.ft_space)
@@ -408,7 +439,7 @@ class TestFeatureTable(object):
     def test_open_table(self):
         mf = MockOriginalFile(1)
         table = self.mox.CreateMock(MockTable)
-        session = MockSession(1, table)
+        session = MockSession(1, table, None)
         store = MockFeatureTable(session)
         cols = [object]
 
@@ -443,7 +474,7 @@ class TestFeatureTable(object):
 
     @pytest.mark.parametrize('image', ['provided', 'unknown', 'lookup'])
     def test_store_by_roi(self, image):
-        session = MockSession(None, None)
+        session = MockSession(None, None, None)
         store = MockFeatureTable(session)
         self.mox.StubOutWithMock(session.qs, 'projection')
         self.mox.StubOutWithMock(store, 'store_by_object')
@@ -744,18 +775,20 @@ class TestFeatureTable(object):
         self.mox.VerifyAll()
 
     def test_get_objects(self):
-        session = MockSession(None, None)
+        session = MockSession(None, None, None)
         store = MockFeatureTable(session)
         self.mox.StubOutWithMock(session.qs, 'findAllByQuery')
 
-        kvs = {'x': 'aaa', 'y': ['bbb', 'ccc']}
+        kvs = {'x': 'aaa', 'y.z': ['bbb', 'ccc']}
         # Need to figure out which order the keys will be read
-        if kvs.keys() == ['x', 'y']:
-            q = "FROM ObjectType WHERE x = :x AND y in (:y)"
+        if kvs.keys() == ['x', 'y.z']:
+            q = "FROM ObjectType WHERE x = :x AND y.z in (:y_z)"
         else:
-            q = "FROM ObjectType WHERE y in (:y) AND x = :x"
+            q = "FROM ObjectType WHERE y.z in (:y_z) AND x = :x"
 
-        params = omero.sys.ParametersI(wrap(kvs).val)
+        params = omero.sys.ParametersI()
+        params.add('x', wrap('aaa'))
+        params.add('y_z', wrap(['bbb', 'ccc']))
         m = object()
 
         session.qs.findAllByQuery(q, mox.Func(
@@ -768,7 +801,7 @@ class TestFeatureTable(object):
 
     @pytest.mark.parametrize('exists', [True, False])
     def test_create_file_annotation(self, exists):
-        session = MockSession(None, None)
+        session = MockSession(None, None, None)
         store = MockFeatureTable(session)
         self.mox.StubOutWithMock(store, 'get_objects')
         self.mox.StubOutWithMock(store, '_file_annotation_exists')
@@ -802,7 +835,7 @@ class TestFeatureTable(object):
         self.mox.VerifyAll()
 
     def test_file_annotation_exists(self):
-        session = MockSession(None, None)
+        session = MockSession(None, None, None)
         store = MockFeatureTable(session)
         self.mox.StubOutWithMock(session.qs, 'findAllByQuery')
 
@@ -829,7 +862,7 @@ class TestFeatureTable(object):
     def test_delete(self):
         perms = self.mox.CreateMock(MockPermissionsHandler)
         table = self.mox.CreateMock(MockTable)
-        session = MockSession(1, table)
+        session = MockSession(1, table, None)
         store = MockFeatureTable(session)
         store.perms = perms
         store.table = table
@@ -906,51 +939,61 @@ class TestFeatureTableManager(object):
         assert fts.ann_space == 'z'
 
     def test_create(self):
+        ownerid = 123
+        session = MockSession(None, None, ownerid)
         fs = MockFeatureTable(None)
         self.mox.StubOutWithMock(OmeroTablesFeatureStore, 'FeatureTable')
         fsname = 'fsname'
         colnames = ['x1', 'x2']
 
         OmeroTablesFeatureStore.FeatureTable(
-            None, fsname, 'x/features', 'x/source').AndReturn(None)
+            session, fsname, 'x/features', 'x/source', ownerid).AndReturn(None)
 
         OmeroTablesFeatureStore.FeatureTable(
-            None, fsname, 'x/features', 'x/source', colnames).AndReturn(fs)
+            session, fsname, 'x/features', 'x/source', ownerid, colnames
+            ).AndReturn(fs)
 
         self.mox.ReplayAll()
 
-        fts = OmeroTablesFeatureStore.FeatureTableManager(None, namespace='x')
+        fts = OmeroTablesFeatureStore.FeatureTableManager(
+            session, namespace='x')
         assert fts.create(fsname, colnames) == fs
 
         assert len(fts.fss) == 1
-        assert fts.fss.get(fsname) == fs
+        assert fts.fss.get((fsname, ownerid)) == fs
 
         self.mox.VerifyAll()
 
     @pytest.mark.parametrize('state', ['opened', 'unopened', 'closed'])
     def test_get(self, state):
-        fs = MockFeatureTable(None)
+        ownerid = 123
+        session = MockSession(None, None, ownerid)
+        fs = MockFeatureTable(session)
         fs.table = object()
         self.mox.StubOutWithMock(OmeroTablesFeatureStore, 'FeatureTable')
         fsname = 'fsname'
-        fts = OmeroTablesFeatureStore.FeatureTableManager(None, namespace='x')
+        fts = OmeroTablesFeatureStore.FeatureTableManager(
+            session, namespace='x')
 
         self.mox.StubOutWithMock(fts.fss, 'get')
         self.mox.StubOutWithMock(fts.fss, 'insert')
 
+        k = (fsname, ownerid)
+
         if state == 'opened':
-            fts.fss.get(fsname).AndReturn(fs)
+            fts.fss.get(k).AndReturn(fs)
         else:
             if state == 'unopened':
-                fts.fss.get(fsname).AndReturn(None)
+                fts.fss.get(k).AndReturn(None)
             if state == 'closed':
                 fsold = MockFeatureTable(None)
-                fts.fss.get(fsname).AndReturn(fsold)
+                fts.fss.get(k).AndReturn(fsold)
             OmeroTablesFeatureStore.FeatureTable(
-                None, fsname, 'x/features', 'x/source').AndReturn(fs)
-            fts.fss.insert(fsname, fs)
+                session, fsname, 'x/features', 'x/source', ownerid
+                ).AndReturn(fs)
+            fts.fss.insert(k, fs)
 
         self.mox.ReplayAll()
 
-        assert fts.get(fsname) == fs
+        assert fts.get(fsname, ownerid) == fs
         self.mox.VerifyAll()
