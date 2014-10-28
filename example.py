@@ -68,6 +68,16 @@ roiid = features.utils.create_roi_for_plane(
 values = numpy.random.rand(len(feature_names))
 fs.store_by_roi(roiid, values)
 
+# Retrieve raw data as a tuple
+rs = fs.fetch_by_object('Image', imageid)
+# Same, using a query
+rs = fs.filter_raw('ImageID==%d' % imageid)
+
+# Convert to numpy arrays
+ids = numpy.vstack(r[:2] for r in rs)
+arr = numpy.vstack(r[2] for r in rs)
+
+
 # Delete the entire featureset and annotations (may be very slow)
 fs.delete()
 
