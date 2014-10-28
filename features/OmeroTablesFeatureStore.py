@@ -253,6 +253,9 @@ class FeatureTable(AbstractFeatureStore):
         return assert_owns_table
 
     def close(self):
+        """
+        Close the table
+        """
         if self.table:
             self.table.close()
             self.table = None
@@ -260,6 +263,13 @@ class FeatureTable(AbstractFeatureStore):
             self.ftnames = None
 
     def get_table(self, coldesc=None):
+        """
+        Get the table using the parameters specified during initialisation
+
+        :param coldesc: If provided a new table will be created and
+        initialised with this list of feature names, default None (table must
+        already exist)
+        """
         tablepath = self.ft_space + '/' + self.name
         if self.table:
             if coldesc:
@@ -286,6 +296,11 @@ class FeatureTable(AbstractFeatureStore):
         return self.table
 
     def new_table(self, coldesc):
+        """
+        Create a new table
+
+        :param coldesc: A list of column names
+        """
         for n in coldesc:
             if not re.match(FEATURE_NAME_RE, n):
                 raise TableUsageException('Invalid feature name: %s' % n)
@@ -343,6 +358,11 @@ class FeatureTable(AbstractFeatureStore):
                 'Failed to get columns for table ID:%d' % tid)
 
     def open_table(self, tablefile):
+        """
+        Open an existing table
+
+        :param tablefile: An OriginalFile
+        """
         tid = unwrap(tablefile.getId())
         self.table = self.session.sharedResources().openTable(tablefile)
         if not self.table:
@@ -353,6 +373,9 @@ class FeatureTable(AbstractFeatureStore):
                 'Failed to get columns for table ID:%d' % tid)
 
     def feature_names(self):
+        """
+        Get the list of feature names
+        """
         if not self.ftnames:
             self.ftnames = self.cols[2].name.split(',')
             assert len(self.ftnames) == self.cols[2].size
@@ -379,6 +402,17 @@ class FeatureTable(AbstractFeatureStore):
     @_owns_table
     def store_by_object(self, object_type, object_id, values,
                         parent_type=None, parent_id=None, replace=True):
+        """
+        Store a feature row
+
+        :param object_type: The object directly associated with the features
+        :param object_id: The object ID
+        :param values: Feature values, an array of doubles
+        :param parent_type: The parent type of the object, optional
+        :param parent_id: The parent ID of the object
+        :param replace: If True (default) replace existing rows with the same
+               IDs
+        """
         image_id = NOID
         roi_id = NOID
         if object_type == 'Image':
@@ -424,7 +458,6 @@ class FeatureTable(AbstractFeatureStore):
             self.create_file_annotation('Roi', roi_id, self.ann_space,
                                         self.table.getOriginalFile())
 
-
     def fetch_by_image(self, image_id, last=False):
         values = self.fetch_by_object('Image', image_id)
         if len(values) > 1 and not last:
@@ -449,6 +482,13 @@ class FeatureTable(AbstractFeatureStore):
         return [self.feature_row(v) for v in values]
 
     def fetch_by_object(self, object_type, object_id):
+        """
+        Fetch all feature rows for an object
+
+        :param object_type: The object type
+        :param object_id: The object ID
+        :return: A list of tuples (Image-ID, Roi-ID, feature-values)
+        """
         if object_type in ('Image', 'Roi'):
             cond = '(%sID==%d)' % (object_type, object_id)
         else:
@@ -457,6 +497,13 @@ class FeatureTable(AbstractFeatureStore):
         return self.filter_raw(cond)
 
     def filter_raw(self, conditions):
+        """
+        Query a feature table, return data as rows
+
+        :param conditions: The query conditions
+               Note the query syntax is still to be decided
+        :return: A list of tuples (Image-ID, Roi-ID, feature-values)
+        """
         offsets = self.table.getWhereList(
             conditions, {}, 0, self.table.getNumberOfRows(), 0)
         values = self.chunked_table_read(offsets, self.get_chunk_size())
@@ -467,6 +514,11 @@ class FeatureTable(AbstractFeatureStore):
         return zip(*values)
 
     def feature_row(self, values):
+        """
+        Create a FeatureRow object
+
+        :param values: The feature values
+        """
         return FeatureRow(
             names=self.feature_names(),
             infonames=[h.name for h in self.cols[:2]],
@@ -488,6 +540,9 @@ class FeatureTable(AbstractFeatureStore):
         return self.chunk_size
 
     def chunked_table_read(self, offsets, chunk_size):
+        """
+        Read part of a table in chunks to avoid the Ice maximum message size
+        """
         values = None
 
         print 'Chunk size: %d' % chunk_size
@@ -503,6 +558,9 @@ class FeatureTable(AbstractFeatureStore):
         return values
 
     def get_objects(self, object_type, kvs):
+        """
+        Retrieve OMERO objects
+        """
         params = omero.sys.ParametersI()
 
         qs = self.session.getQueryService()
@@ -525,6 +583,14 @@ class FeatureTable(AbstractFeatureStore):
         return results
 
     def create_file_annotation(self, object_type, object_id, ns, ofile):
+        """
+        Create a file annotation
+
+        :param object_type: The object type
+        :param object_id: The object ID
+        :param ns: The namespace
+        :param ofile: The originalFile
+        """
         fid = unwrap(ofile.getId())
         links = self._file_annotation_exists(object_type, object_id, ns, fid)
         if len(links) > 1:
@@ -558,6 +624,9 @@ class FeatureTable(AbstractFeatureStore):
 
     @_owns_table
     def delete(self):
+        """
+        Delete the entire featureset including annotations
+        """
         # There's a bug (?) which means multiple FileAnnotations with the same
         # OriginalFile child can't be deleted using the graph spec methods.
         # For now just delete everything individually
