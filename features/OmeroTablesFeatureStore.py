@@ -509,6 +509,8 @@ class FeatureTable(AbstractFeatureStore):
         values = self.chunked_table_read(offsets, self.get_chunk_size())
 
         # Convert into row-wise storage
+        if not values:
+            return []
         for v in values:
             assert len(offsets) == len(v)
         return zip(*values)

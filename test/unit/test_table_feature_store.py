@@ -664,10 +664,12 @@ class TestFeatureTable(object):
         table.getNumberOfRows().AndReturn(123)
         table.getWhereList('(ImageID==99)', {}, 0, 123, 0).AndReturn(offsets)
 
-        data = []
-        for c in xrange(ncols):
-            cvals = [[r * 10 + c] for r in xrange(1, nrows + 1)]
-            data.append(cvals)
+        data = None
+        if nrows > 0:
+            data = []
+            for c in xrange(ncols):
+                cvals = [[r * 10 + c] for r in xrange(1, nrows + 1)]
+                data.append(cvals)
 
         store.get_chunk_size().AndReturn(2)
         store.chunked_table_read(offsets, 2).AndReturn(data)
