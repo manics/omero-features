@@ -184,7 +184,6 @@ class TestFeatureTable(TableStoreTestHelper):
     @pytest.mark.parametrize('exists', [True, False])
     @pytest.mark.parametrize('replace', [True, False])
     def test_store_by_object(self, exists, replace):
-        owned = True
         width = 2
 
         tid, tcols, ftnames = TableStoreHelper.create_table(
@@ -248,7 +247,6 @@ class TestFeatureTable(TableStoreTestHelper):
         store.close()
 
     def test_store_by_object_unowned(self):
-        owned = False
         width = 2
         user2 = self.create_user_same_group()
         tablesess = self.create_client_session(user2)

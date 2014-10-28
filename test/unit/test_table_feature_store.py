@@ -454,7 +454,7 @@ class TestFeatureTable(object):
             params.addId(12)
             session.getQueryService().projection(
                 'SELECT r.image.id FROM Roi r WHERE r.id=:id', mox.Func(
-                lambda o: self.parameters_equal(params, o))).AndReturn(
+                    lambda o: self.parameters_equal(params, o))).AndReturn(
                 [[wrap(1234)]])
             imageid = 1234
         elif image == 'provided':
