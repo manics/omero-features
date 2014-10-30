@@ -401,7 +401,7 @@ class FeatureTable(AbstractFeatureStore):
         return self.ftnames
 
     def store_by_image(self, image_id, values):
-        self.store_by_object('Image', image_id, values)
+        self.store_by_object('Image', long(image_id), values)
 
     def store_by_roi(self, roi_id, values, image_id=None):
         if image_id is None:
@@ -414,9 +414,10 @@ class FeatureTable(AbstractFeatureStore):
             except IndexError:
                 raise TableUsageException('No image found for Roi: %d', roi_id)
         if image_id < 0:
-            self.store_by_object('Roi', roi_id, values)
+            self.store_by_object('Roi', long(roi_id), values)
         else:
-            self.store_by_object('Roi', roi_id, values, 'Image', image_id)
+            self.store_by_object(
+                'Roi', long(roi_id), values, 'Image', image_id)
 
     @_owns_table
     def store_by_object(self, object_type, object_id, values,
