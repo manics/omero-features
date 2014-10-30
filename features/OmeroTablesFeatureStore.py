@@ -309,6 +309,31 @@ class FeatureTable(AbstractFeatureStore):
             self.open_table(tablefile[0])
         return self.table
 
+    def _get_column_descriptor(self, coldesc):
+        coldef = [
+            omero.grid.ImageColumn('ImageID', ''),
+            omero.grid.RoiColumn('RoiID', '')
+        ]
+
+        # We don't currently have a good way of storing individual feature
+        # names for a DoubleArrayColumn:
+        # - The number of DoubleColumns allowed in a table is limited (and
+        #   slow)
+        # - Tables.setMetadata is broken
+        #   https://trac.openmicroscopy.org.uk/ome/ticket/12606
+        # - Column descriptions can't be retrieved through the API
+        # - The total size of table attributes is limited to around 64K (not
+        #   sure if this is a per-attribute/object/table limitation)
+        # For now save the feature names into the column name.
+        names = ','.join(coldesc)
+        if len(names) > 64000:
+            log.warn(
+                'Feature names may exceed the limit of the current Tables API')
+        coldef.append(omero.grid.DoubleArrayColumn(
+            names, '', len(coldesc)))
+
+        return coldef
+
     def new_table(self, coldesc):
         """
         Create a new table
@@ -343,27 +368,7 @@ class FeatureTable(AbstractFeatureStore):
             if not self.table:
                 raise OmeroTableException('Failed to reopen table ID:%d' % tid)
 
-        coldef = [
-            omero.grid.ImageColumn('ImageID', ''),
-            omero.grid.RoiColumn('RoiID', '')
-        ]
-
-        # We don't currently have a good way of storing individual feature
-        # names for a DoubleArrayColumn:
-        # - The number of DoubleColumns allowed in a table is limited (and
-        #   slow)
-        # - Tables.setMetadata is broken
-        #   https://trac.openmicroscopy.org.uk/ome/ticket/12606
-        # - Column descriptions can't be retrieved through the API
-        # - The total size of table attributes is limited to around 64K (not
-        #   sure if this is a per-attribute/object/table limitation)
-        # For now save the feature names into the column name.
-        names = ','.join(coldesc)
-        if len(names) > 64000:
-            log.warn(
-                'Feature names may exceed the limit of the current Tables API')
-        coldef.append(omero.grid.DoubleArrayColumn(
-            names, '', len(coldesc)))
+        coldef = self._get_column_descriptor(coldesc)
 
         try:
             self.table.initialize(coldef)
@@ -419,6 +424,11 @@ class FeatureTable(AbstractFeatureStore):
             self.store_by_object(
                 'Roi', long(roi_id), values, 'Image', image_id)
 
+    def _assign_values_to_cols(self, metas, values):
+        self.cols[0].values = [metas[0]]
+        self.cols[1].values = [metas[1]]
+        self.cols[2].values = [values]
+
     @_owns_table
     def store_by_object(self, object_type, object_id, values,
                         parent_type=None, parent_id=None, replace=True):
@@ -451,19 +461,15 @@ class FeatureTable(AbstractFeatureStore):
             raise TableUsageException(
                 'Invalid object type: %s' % object_type)
 
-        self.cols[0].values = [image_id]
-        self.cols[1].values = [roi_id]
-
         offset = -1
         if replace:
-            conditions = '(ImageID==%d) & (RoiID==%d)' % (
-                self.cols[0].values[0], self.cols[1].values[0])
+            conditions = '(ImageID==%d) & (RoiID==%d)' % (image_id, roi_id)
             offsets = self.table.getWhereList(
                 conditions, {}, 0, self.table.getNumberOfRows(), 0)
             if offsets:
                 offset = max(offsets)
 
-        self.cols[2].values = [values]
+        self._assign_values_to_cols([image_id, roi_id], values)
 
         if offset > -1:
             data = omero.grid.Data(rowNumbers=[offset], columns=self.cols)
@@ -690,6 +696,73 @@ class FeatureTable(AbstractFeatureStore):
     def _get_annotation_link_types():
         return [s for s in dir(omero.model) if s.endswith(
             'AnnotationLink') and not s.startswith('_')]
+
+
+class FeatureTableScalar(FeatureTable):
+    """
+    A feature store.
+    Each row is an array of fixed width Doubles
+    """
+
+    def __init__(self, session, name, ft_space, ann_space, ownerid,
+                 coldesc=None):
+        super(FeatureTableScalar, self).__init__(
+            session, name, ft_space, ann_space, ownerid, coldesc=None)
+
+    def _get_column_descriptor(self, coldesc):
+        coldef = [
+            omero.grid.ImageColumn('ImageID', ''),
+            omero.grid.RoiColumn('RoiID', '')
+        ]
+        coldef.extend([omero.grid.DoubleColumn(name) for name in coldesc])
+        return coldef
+
+    def feature_names(self):
+        """
+        Get the list of feature names
+        """
+        if not self.ftnames:
+            self.ftnames = [c.name for c in self.cols[2:]]
+        return self.ftnames
+
+    def _assign_values_to_cols(self, metas, values):
+        self.cols[0].values = [metas[0]]
+        self.cols[1].values = [metas[1]]
+        for n in xrange(len(self.cols) - 2):
+            self.cols[n + 2].values = [values[n]]
+
+    def filter_raw(self, conditions):
+        """
+        Query a feature table, return data as rows
+
+        :param conditions: The query conditions
+               Note the query syntax is still to be decided
+        :return: A list of tuples (Image-ID, Roi-ID, feature-values)
+        """
+        offsets = self.table.getWhereList(
+            conditions, {}, 0, self.table.getNumberOfRows(), 0)
+        values = self.chunked_table_read(offsets, self.get_chunk_size())
+
+        # Convert into row-wise storage
+        if not values:
+            return []
+        for v in values:
+            assert len(offsets) == len(v)
+        print values
+        print self.cols
+        return [(a, b, list(c)) for a, b, c in
+                zip(values[0], values[1], zip(*values[2:]))]
+
+    def feature_row(self, values):
+        """
+        Create a FeatureRow object
+
+        :param values: The feature values
+        """
+        return FeatureRow(
+            names=self.feature_names(),
+            infonames=[h.name for h in self.cols[:2]],
+            values=values[2:], infovalues=values[:2])
 
 
 class LRUCache(object):
