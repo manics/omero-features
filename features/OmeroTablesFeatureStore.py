@@ -365,7 +365,12 @@ class FeatureTable(AbstractFeatureStore):
         coldef.append(omero.grid.DoubleArrayColumn(
             names, '', len(coldesc)))
 
-        self.table.initialize(coldef)
+        try:
+            self.table.initialize(coldef)
+        except omero.InternalException:
+            log.error('Failed to initialize table, deleting: %d', tid)
+            self.session.getUpdateService().deleteObject(tof)
+            raise
         self.cols = self.table.getHeaders()
         if not self.cols:
             raise OmeroTableException(
