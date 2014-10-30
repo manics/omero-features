@@ -234,7 +234,7 @@ class PermissionsHandler(object):
 class FeatureTable(AbstractFeatureStore):
     """
     A feature store.
-    Each row is an array of fixed width DoubleArrays
+    Each row is an Image-ID, Roi-ID and a single fixed-width DoubleArray
     """
 
     def __init__(self, session, name, ft_space, ann_space, ownerid,
