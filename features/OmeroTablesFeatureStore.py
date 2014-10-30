@@ -482,6 +482,9 @@ class FeatureTable(AbstractFeatureStore):
         if len(values) > 1 and not last:
             raise TableUsageException(
                 'Multiple feature rows found for Image %d' % image_id)
+        if not values:
+            raise TableUsageException(
+                'No feature rows found for Image %d' % image_id)
         return self.feature_row(values[-1])
 
     def fetch_by_roi(self, roi_id, last=False):
@@ -489,6 +492,9 @@ class FeatureTable(AbstractFeatureStore):
         if len(values) > 1 and not last:
             raise TableUsageException(
                 'Multiple feature rows found for Roi %d' % roi_id)
+        if not values:
+            raise TableUsageException(
+                'No feature rows found for Roi %d' % roi_id)
         return self.feature_row(values[-1])
 
     def fetch_all(self, image_id):
