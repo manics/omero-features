@@ -32,6 +32,9 @@ from omero.rtypes import unwrap, wrap
 import itertools
 import re
 
+import logging
+log = logging.getLogger(__name__)
+
 
 DEFAULT_NAMESPACE = 'omero.features/0.1'
 DEFAULT_FEATURE_SUBSPACE = 'features'
@@ -327,7 +330,7 @@ class FeatureTable(AbstractFeatureStore):
         tid = unwrap(tof.getId())
         if (unwrap(tof.getPath()) != self.ft_space or
                 unwrap(tof.getName()) != self.name):
-            print 'Overriding table path and name'
+            log.warn('Overriding table path and name')
             tof.setPath(wrap(self.ft_space))
             tof.setName(wrap(self.name))
             tof = self.session.getUpdateService().saveAndReturnObject(tof)
@@ -357,8 +360,8 @@ class FeatureTable(AbstractFeatureStore):
         # For now save the feature names into the column name.
         names = ','.join(coldesc)
         if len(names) > 64000:
-            print ('WARNING: Feature names may exceed the limit of the '
-                   'current Tables API')
+            log.warn(
+                'Feature names may exceed the limit of the current Tables API')
         coldef.append(omero.grid.DoubleArrayColumn(
             names, '', len(coldesc)))
 
@@ -488,7 +491,7 @@ class FeatureTable(AbstractFeatureStore):
         return [self.feature_row(v) for v in values]
 
     def filter(self, conditions):
-        print 'WARNING: The filter/query syntax is still under development'
+        log.warn('The filter/query syntax is still under development')
         values = self.filter_raw(conditions)
         return [self.feature_row(v) for v in values]
 
@@ -558,9 +561,9 @@ class FeatureTable(AbstractFeatureStore):
         """
         values = None
 
-        print 'Chunk size: %d' % chunk_size
+        log.info('Chunk size: %d', chunk_size)
         for n in xrange(0, len(offsets), chunk_size):
-            print '  Chunk offset: %d+%d' % (n, chunk_size)
+            log.info('Chunk offset: %d+%d', n, chunk_size)
             data = self.table.readCoordinates(offsets[n:(n + chunk_size)])
             if values is None:
                 values = [c.values for c in data.columns]
@@ -608,8 +611,8 @@ class FeatureTable(AbstractFeatureStore):
         fid = unwrap(ofile.getId())
         links = self._file_annotation_exists(object_type, object_id, ns, fid)
         if len(links) > 1:
-            print 'WARNING: Multiple links found: ns:%s %s:%d file:%d' % (
-                ns, object_type, object_id, fid)
+            log.warn('Multiple links found: ns:%s %s:%d file:%d',
+                     ns, object_type, object_id, fid)
         if links:
             return links[0]
 
@@ -663,8 +666,8 @@ class FeatureTable(AbstractFeatureStore):
         ds.extend(r)
         ds.append(tof)
 
-        print 'Deleting: %s' % [
-            (d.__class__.__name__, unwrap(d.getId())) for d in ds]
+        log.info('Deleting: %s',
+                 [(d.__class__.__name__, unwrap(d.getId())) for d in ds])
 
         us = self.session.getUpdateService()
         self.close()
@@ -722,7 +725,7 @@ class LRUClosableCache(LRUCache):
 
     def close(self):
         while self.cache:
-            print 'close', self.cache
+            log.debug('close, %s', self.cache)
             self.remove_oldest()
 
 
