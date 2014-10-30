@@ -19,27 +19,25 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-import os
-import sys
-sys.path.append(os.getcwd())
-
 import numpy
+
 import features
 
-# Note the OMERO client variable must exists (for instance run this script
-# from inside `bin/omero shell --login`)
+import logging
+features.OmeroTablesFeatureStore.log.setLevel(logging.DEBUG)
 
-# 10 features within this featureset, each feature is a fixed-width vector
-# (but each feature can be a different width)
+# Note the OMERO client variable must exist (for instance run this script
+# from inside `bin/omero shell --login`)
+session = client.getSession()
+
+# 10 features within this featureset
 featureset_name = 'Test Featureset'
 feature_names = ['x%04d' % n for n in xrange(10)]
-feature_widths = range(1, 11)
 
-manager = features.OmeroTablesFeatureStore.FeatureTableManager(
-    client.getSession())
+manager = features.OmeroTablesFeatureStore.FeatureTableManager(session)
 
 # Create a new featureset (name must be unique within this group)
-manager.create(featureset_name, feature_names, feature_widths)
+manager.create(featureset_name, feature_names)
 
 # Retrieve an existing featureset
 fs = manager.get(featureset_name)
@@ -48,7 +46,7 @@ fs = manager.get(featureset_name)
 # an annotation on the image linking it to the underlying table file
 imageid = 3889L
 
-values = tuple(numpy.random.rand(n) for n in feature_widths)
+values = numpy.random.rand(len(feature_names))
 fs.store_by_image(imageid, values)
 
 # Retrieve the features
@@ -65,10 +63,19 @@ print '\n'.join('%s=%s' % kv for kv in zip(r.names, r.values))
 
 # Store some features for z single Z/C/T plane by creating a ROI
 z, c, t = 0, 0, 0
-roiid = features.utils.create_roi_for_plane(
-    client.getSession(), imageid, z, c, t)
-values = tuple(numpy.random.rand(n) for n in feature_widths)
+roiid = features.utils.create_roi_for_plane(session, imageid, z, c, t)
+values = numpy.random.rand(len(feature_names))
 fs.store_by_roi(roiid, values)
+
+# Retrieve raw data as a tuple
+rs = fs.fetch_by_object('Image', imageid)
+# Same, using a query
+rs = fs.filter_raw('ImageID==%d' % imageid)
+
+# Convert to numpy arrays
+ids = numpy.vstack(r[:2] for r in rs)
+arr = numpy.vstack(r[2] for r in rs)
+
 
 # Delete the entire featureset and annotations (may be very slow)
 fs.delete()

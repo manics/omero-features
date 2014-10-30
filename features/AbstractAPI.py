@@ -35,9 +35,8 @@ class AbstractFeatureRow(object):
 
     __metaclass__ = ABCMeta
 
-    def __init__(self, widths=None, names=None, values=None,
+    def __init__(self, names=None, values=None,
                  infonames=None, infovalues=None):
-        self._widths = widths
         self._names = names
         self._values = values
         self._infonames = None
@@ -56,10 +55,6 @@ class AbstractFeatureRow(object):
         return self._names
 
     @property
-    def widths(self):
-        return self._widths
-
-    @property
     def values(self):
         return self._values
 
@@ -74,24 +69,12 @@ class AbstractFeatureStore(object):
     __metaclass__ = ABCMeta
 
     @abstractmethod
-    def store(self, image_id, roi_id, values):
-        """
-        Store a row of features identified by Image ID and/or ROI ID
-
-        :param image_id: The Image ID
-        :param roi_id: The ROI ID, may be None
-        :params values: A list of FeatureRows
-        """
-        pass
-
-    @abstractmethod
     def store_by_image(self, image_id, values):
         """
         Store a single FeatureRow by Image ID
 
         :param image_id: The Image ID
         :param values: The feature values
-        :return: A FeatureRow
         """
         pass
 
@@ -102,7 +85,6 @@ class AbstractFeatureStore(object):
 
         :param image_id: The Image ID
         :param values: The feature values
-        :return: A FeatureRow
         """
         pass
 
@@ -127,26 +109,26 @@ class AbstractFeatureStore(object):
         pass
 
     @abstractmethod
-    def fetch_all(self, featureset_name, image_id):
+    def fetch_all(self, image_id):
         """
         Retrieve all rows of features identified by Image ID
 
-        :param featureset_name: The featureset identifier
         :param image_id: The Image ID
         :return: A list of FeatureRows
         """
         pass
 
-    #@abstractmethod
-    def filter(self, featureset_name, conditions):
+    @abstractmethod
+    def filter(self, conditions):
         """
         Retrieve the features and Image/ROI IDs which fulfill the conditions
 
-        :param featureset_name: The featureset identifier
         :param conditions: The feature query conditions
-        :return: A list of (Image-ID, ROI-ID, FeatureRow) triplets
+        :return: A list of FeatureRows
+
+        TODO: Decide on the query syntax
         """
-        raise Exception('Not implemented')
+        pass
 
 
 class AbstractFeatureStoreManager(object):
