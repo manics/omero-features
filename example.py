@@ -19,22 +19,22 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-import os
-import sys
-sys.path.append(os.getcwd())
-
 import numpy
+
 import features
 
-# Note the OMERO client variable must exists (for instance run this script
+import logging
+features.OmeroTablesFeatureStore.log.setLevel(logging.DEBUG)
+
+# Note the OMERO client variable must exist (for instance run this script
 # from inside `bin/omero shell --login`)
+session = client.getSession()
 
 # 10 features within this featureset
 featureset_name = 'Test Featureset'
 feature_names = ['x%04d' % n for n in xrange(10)]
 
-manager = features.OmeroTablesFeatureStore.FeatureTableManager(
-    client.getSession())
+manager = features.OmeroTablesFeatureStore.FeatureTableManager(session)
 
 # Create a new featureset (name must be unique within this group)
 manager.create(featureset_name, feature_names)
@@ -63,8 +63,7 @@ print '\n'.join('%s=%s' % kv for kv in zip(r.names, r.values))
 
 # Store some features for z single Z/C/T plane by creating a ROI
 z, c, t = 0, 0, 0
-roiid = features.utils.create_roi_for_plane(
-    client.getSession(), imageid, z, c, t)
+roiid = features.utils.create_roi_for_plane(session, imageid, z, c, t)
 values = numpy.random.rand(len(feature_names))
 fs.store_by_roi(roiid, values)
 
