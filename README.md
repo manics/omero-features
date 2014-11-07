@@ -11,7 +11,7 @@ See examples.py for an example of how to use this.
 
 The aim was to create a basic functional client-side library usable by external developers without requiring any changes to OMERO.
 
-Feedback from this initial implementation will be used to inform changes to the core OMERO components needed to support big and potentially unstructured data sets.
+Feedback from this initial implementation will be used to decide how to support the additional metadata associated with the calculation of features, to work out a good system for querying/retrieving features, and to scope out changes to the core OMERO components needed to support big and potentially unstructured feature sets.
 
 Main limitations
 ----------------
