@@ -19,92 +19,66 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-import os
-import sys
-sys.path.append(os.path.abspath(os.path.dirname(__file__)))
-
 import numpy
-from itertools import product
-from features.storage import Storage
 
-#size = (2, 3, 4)
-size = (3, )
-filename = 'test.h5'
+import features
 
-def test_desc_str():
-    d = {'as_ds':'345', 'bb':'^^^\\', '_==c\_':'43'}
-    s = Storage.desc_to_str(d)
-    sd = Storage.str_to_desc(s)
-    assert d == sd
+import logging
+features.OmeroTablesFeatureStore.log.setLevel(logging.DEBUG)
 
-def example_create():
-    with Storage(filename, 'w') as s:
-        #rowdesc = {'type': str, 'id': int, 'c': int, 'z': int, 't': int}
-        rowdesc = [
-            ('type', str), ('id', int), ('c', int), ('z', int), ('t', int)
-            ]
-        featuredesc = {'name': 'Test Featureset', 'version': '0.1.0'}
-        s.newFeatureGroup(rowdesc, size, featuredesc)
+# Note the OMERO client variable must exist (for instance run this script
+# from inside `bin/omero shell --login`)
+session = client.getSession()
 
-def example_write():
-    with Storage(filename, 'a') as s:
-        iczts = product(xrange(4), xrange(3), xrange(2), xrange(2))
-        for i, c, z, t in iczts:
-            #values = numpy.random.rand(*size)
-            values = numpy.array(range(numpy.prod(size))).reshape(size) + i
-            s.store1(
-                {'type': 'Object', 'id': i, 'c': c, 'z': z, 't': t}, values)
+# 10 features within this featureset
+featureset_name = 'Test Featureset'
+feature_names = ['x%04d' % n for n in xrange(10)]
 
-def example_read():
-    with Storage(filename, 'r') as s:
-        print s.feature_desc()
-        # Queries: lists elements are ORed, dict fields are ANDed
-        x = s.fetch([{'c': 1, 'id': 0}, {'c': 2, 'id': [1, 2]}])
-    return x
+manager = features.OmeroTablesFeatureStore.FeatureTableManager(session)
 
-def example():
-    example_create()
-    example_write()
-    print example_read()
+# Create a new featureset (name must be unique within this group)
+manager.create(featureset_name, feature_names)
+
+# Retrieve an existing featureset
+fs = manager.get(featureset_name)
+
+# Store some features associated with an image. This will automatically create
+# an annotation on the image linking it to the underlying table file
+imageid = 3889L
+
+values = numpy.random.rand(len(feature_names))
+fs.store_by_image(imageid, values)
+
+# Retrieve the features
+r = fs.fetch_by_image(imageid)
+# If multiple matching rows are found this will throw an exception, pass
+# last=True to return just the last matching row
+r = fs.fetch_by_image(imageid, last=True)
+
+# Feature metadata (currently just Image/Roi IDs):
+print '\n'.join('%s=%s' % kv for kv in zip(r.infonames, r.infovalues))
+
+# Feature names and values
+print '\n'.join('%s=%s' % kv for kv in zip(r.names, r.values))
+
+# Store some features for z single Z/C/T plane by creating a ROI
+z, c, t = 0, 0, 0
+roiid = features.utils.create_roi_for_plane(session, imageid, z, c, t)
+values = numpy.random.rand(len(feature_names))
+fs.store_by_roi(roiid, values)
+
+# Retrieve raw data as a tuple
+rs = fs.fetch_by_object('Image', imageid)
+# Same, using a query
+rs = fs.filter_raw('ImageID==%d' % imageid)
+
+# Convert to numpy arrays
+ids = numpy.vstack(r[:2] for r in rs)
+arr = numpy.vstack(r[2] for r in rs)
 
 
+# Delete the entire featureset and annotations (may be very slow)
+fs.delete()
 
-bigsize = 1000
-
-def big_create():
-    with Storage(filename, 'w') as s:
-        rowdesc = [
-            ('type', str), ('id', int), ('c', int), ('z', int), ('t', int)]
-        featuredesc = {'name': 'Test Big Featureset', 'version': '0.1.0'}
-        s.newFeatureGroup(rowdesc, bigsize, featuredesc)
-
-def big_write():
-    with Storage(filename, 'a') as s:
-        iczts = product(xrange(2000), xrange(4), xrange(5), xrange(6))
-        for i, c, z, t in iczts:
-            #values = numpy.random.rand(*size)
-            values = numpy.array(range(numpy.prod(bigsize))).reshape(bigsize) + i
-            s.store1(
-                {'type': 'Object', 'id': i, 'c': c, 'z': z, 't': t}, values)
-
-def big_create_indices():
-    with Storage(filename, 'a') as s:
-        s.create_indices()
-
-def big_read1():
-    with Storage(filename, 'r') as s:
-        print s.feature_desc()
-        x = s.fetch([
-            {'c': 1, 'id': range(0, 2000, 20)},
-            {'c': 2, 'id': range(5, 2000, 20)}
-            ])
-    return x
-
-def big_read2():
-    with Storage(filename, 'r') as s:
-        print s.feature_desc()
-        x = s.fetch([
-            {'c': 1, 'z': [0, 2, 4], 't': [0, 2, 4]},
-            {'c': 2, 'z': [1, 3], 't': [1, 3, 5]}
-            ])
-    return x
+# Close all tables
+manager.close()

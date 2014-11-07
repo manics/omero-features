@@ -23,19 +23,138 @@
 OMERO.features abstract API
 """
 
-class AbstractFeatureSetStorage(object):
-
-    def store1(self, rowmeta, values):
-        raise Exception('Not implemented')
-
-    def fetch(self, rowquery):
-        raise Exception('Not implemented')
+from abc import ABCMeta, abstractmethod
 
 
-class AbstractFeatureStorage(object):
+class AbstractFeatureRow(object):
+    """
+    A featureset row
 
-    def store1(self, rowmeta, fsmeta, values):
-        raise Exception('Not implemented')
+    Each row consists of a list of arrays of doubles
+    """
 
-    def fetch(self, rowmeta, fsmeta):
-        raise Exception('Not implemented')
+    __metaclass__ = ABCMeta
+
+    def __init__(self, names=None, values=None,
+                 infonames=None, infovalues=None):
+        self._names = names
+        self._values = values
+        self._infonames = None
+        self._infovalues = None
+
+    @abstractmethod
+    def __getitem__(self, key):
+        pass
+
+    @abstractmethod
+    def __setitem__(self, key, value):
+        pass
+
+    @property
+    def names(self):
+        return self._names
+
+    @property
+    def values(self):
+        return self._values
+
+
+class AbstractFeatureStore(object):
+    """
+    A single feature store
+
+    Each entry in a feature store consists of a FeatureRow
+    """
+
+    __metaclass__ = ABCMeta
+
+    @abstractmethod
+    def store_by_image(self, image_id, values):
+        """
+        Store a single FeatureRow by Image ID
+
+        :param image_id: The Image ID
+        :param values: The feature values
+        """
+        pass
+
+    @abstractmethod
+    def store_by_roi(self, roi_id, values):
+        """
+        Store a single FeatureRow by Image ID
+
+        :param image_id: The Image ID
+        :param values: The feature values
+        """
+        pass
+
+    @abstractmethod
+    def fetch_by_image(self, image_id):
+        """
+        Retrieve a single FeatureRow by Image ID
+
+        :param image_id: The Image ID
+        :return: A FeatureRow
+        """
+        pass
+
+    @abstractmethod
+    def fetch_by_roi(self, roi_id):
+        """
+        Retrieve a single FeatureRow by ROI ID
+
+        :param roi_id: The ROI ID
+        :return: A FeatureRow
+        """
+        pass
+
+    @abstractmethod
+    def fetch_all(self, image_id):
+        """
+        Retrieve all rows of features identified by Image ID
+
+        :param image_id: The Image ID
+        :return: A list of FeatureRows
+        """
+        pass
+
+    @abstractmethod
+    def filter(self, conditions):
+        """
+        Retrieve the features and Image/ROI IDs which fulfill the conditions
+
+        :param conditions: The feature query conditions
+        :return: A list of FeatureRows
+
+        TODO: Decide on the query syntax
+        """
+        pass
+
+
+class AbstractFeatureStoreManager(object):
+    """
+    Manages multiple feature stores
+    """
+
+    __metaclass__ = ABCMeta
+
+    @abstractmethod
+    def create(self, featureset_name, names, widths):
+        """
+        Create a new feature store
+
+        :param featureset_name: The featureset identifier
+        :param names: A list of feature names
+        :param widths: A list of widths of each feature
+        """
+        pass
+
+    @abstractmethod
+    def get(self, featureset_name):
+        """
+        Get an existing feature store
+
+        :param featureset_name: The featureset identifier
+        :return: An AbstractFeatureStore
+        """
+        pass
