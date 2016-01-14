@@ -1,4 +1,6 @@
 OMERO.features
 ==============
 
-Code for investigating potential feature storage solutions for OMERO.
+IDR WND-CHARM
+
+See https://github.com/ome/omero-features/wiki/IDR-WND-CHARM
