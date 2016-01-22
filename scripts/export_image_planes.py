@@ -27,8 +27,8 @@ import argparse
 import errno
 import getpass
 import logging
-import numpy
 import os
+from PIL import Image
 
 import omero
 import omero.gateway
@@ -40,25 +40,36 @@ log.setLevel(logging.INFO)
 class Connection(object):
 
     def __init__(self, host=None, port=None, user=None, password=None,
-                 sessionid=None, groupid=-1, detach=False):
+                 sessionid=None, client=None, groupid=-1, detach=False):
         if not host:
             host = 'localhost'
         if not port:
             port = 4064
-        if not sessionid:
+
+        self.client = client
+        try:
+            self.session = client.getSession()
+            log.info('Using existing session: %s', self.session)
+        except (AttributeError, omero.ClientError):
+            self.session = None
+        if not self.session and not sessionid:
             if not user:
                 user = raw_input('User: ')
             if not password:
                 password = getpass.getpass()
 
-        self.client = omero.client(host, port)
-        if sessionid:
-            self.session = self.client.joinSession(sessionid)
-            log.info('Joined session as: %s', self.session)
-        else:
-            self.session = self.client.createSession(user, password)
-            log.info('Created session: %s', self.session)
-        self.client.enableKeepAlive(60)
+        if not self.client:
+            log.debug('Creating client')
+            self.client = omero.client(host, port)
+
+        if not self.session:
+            if sessionid:
+                self.session = self.client.joinSession(sessionid)
+                log.info('Joined session as: %s', self.session)
+            else:
+                self.session = self.client.createSession(user, password)
+                log.info('Created session: %s', self.session)
+                self.client.enableKeepAlive(60)
         self.conn = omero.gateway.BlitzGateway(client_obj=self.client)
         self.conn.SERVICE_OPTS.setOmeroGroup(groupid)
         self.detach = detach
@@ -101,11 +112,12 @@ def list_unique_image_ids(imgen):
     return sorted(iids)
 
 
-def get_npy_filename(basedir, iid, z, c, t, args):
+def get_output_filename(basedir, iid, z, c, t, ext, args):
     """
-    Creates a filename for a npy file, creates parent directories if necessary
+    Creates a filename for the output plane file, creates parent directories
+    if necessary
     """
-    imdir = os.path.join(basedir, 'image%08d' % iid)
+    imdir = os.path.join(basedir, 'image-%08d' % iid)
     try:
         if not args.dry_run:
             os.makedirs(imdir)
@@ -114,13 +126,13 @@ def get_npy_filename(basedir, iid, z, c, t, args):
             raise
 
     filename = os.path.join(
-        imdir, 'image%08d-z%04d-c%04d-t%04d.npy' % (iid, z, c, t))
+        imdir, 'image-%08d-z%04d-c%04d-t%04d.%s' % (iid, z, c, t, ext))
     return filename
 
 
 def writeplanes(client, im, outdir, args):
     """
-    Save individual image planes as numpy files
+    Save individual image planes as single tif files
     """
     if not im:
         raise Exception('Image is None')
@@ -132,12 +144,20 @@ def writeplanes(client, im, outdir, args):
     pixels = im.getPrimaryPixels()
     for plane in pixels.getPlanes(zcts):
         z, c, t = zcts[n]
-        filename = get_npy_filename(outdir, iid, z, c, t, args)
+        filename = get_output_filename(outdir, iid, z, c, t, 'tif', args)
         log.debug('Saving Image:%d z:%d c:%d t:%d (%dx%d) to %s',
                   iid, z, c, t, im.getSizeX(), im.getSizeY(), filename)
         if not args.dry_run:
-            numpy.save(filename, plane)
+            pim = Image.fromarray(plane)
+            pim.save(filename, 'TIFF')
         n += 1
+
+
+# If run from omero shell we may already have a global client variable
+try:
+    omero_client = client
+except NameError:
+    omero_client = None
 
 
 def main(args):
@@ -146,7 +166,7 @@ def main(args):
     log.info(args)
 
     with Connection(args.server, args.port, args.user, password=args.password,
-                    detach=False) as c:
+                    client=omero_client, detach=False) as c:
         objects = c.objectGenerator(args.ordered_arguments)
         for im in c.imageGenerator(objects):
             log.info('Image: %d', im.id)
@@ -187,11 +207,7 @@ def parse_args(args=None):
 
 
 if __name__ == '__main__':
-    # Don't run if called inside ipython
-    try:
-        __IPYTHON__
-    except NameError:
-        args = parse_args()
-        if args.verbose:
-            log.setLevel(logging.DEBUG)
-        main(args)
+    args = parse_args()
+    if args.verbose:
+        log.setLevel(logging.DEBUG)
+    main(args)
