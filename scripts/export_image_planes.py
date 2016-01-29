@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 #
-# Copyright (C) 2014 University of Dundee & Open Microscopy Environment.
+# Copyright (C) 2014-6 University of Dundee & Open Microscopy Environment.
 # All rights reserved.
 #
 # This program is free software; you can redistribute it and/or modify
@@ -28,7 +28,8 @@ import errno
 import getpass
 import logging
 import os
-from PIL import Image
+# Pillow has poor support for complex tiff files
+from tifffile import imsave
 
 import omero
 import omero.gateway
@@ -148,8 +149,7 @@ def writeplanes(client, im, outdir, args):
         log.debug('Saving Image:%d z:%d c:%d t:%d (%dx%d) to %s',
                   iid, z, c, t, im.getSizeX(), im.getSizeY(), filename)
         if not args.dry_run:
-            pim = Image.fromarray(plane)
-            pim.save(filename, 'TIFF')
+            imsave(filename, plane, metadata={'axes': 'YX'})
         n += 1
 
 
